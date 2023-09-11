@@ -43,6 +43,7 @@ jobs:
 
     - name: install poetry
       run: |
+        echo "POETRY_HOME=/Users/runner/.local-${{ matrix.os }}" >> $GITHUB_ENV
         curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
         poetry config virtualenvs.create "true"
         poetry config virtualenvs.in-project "true"
