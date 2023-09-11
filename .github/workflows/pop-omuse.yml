@@ -16,7 +16,7 @@ jobs:
   build-deps:
     strategy:
       matrix:
-        os: [ macos-latest ]
+        os: [ ubuntu-latest, macos-latest ]
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.os }}
@@ -43,8 +43,10 @@ jobs:
 
     - name: install poetry
       run: |
-        echo "POETRY_HOME=/Users/runner/.local-${{ matrix.os }}" >> $GITHUB_ENV
         curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
+        if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
+          echo "PATH=/Users/runner/.local/bin:$PATH" >> $GITHUB_ENV
+        fi
         poetry config virtualenvs.create "true"
         poetry config virtualenvs.in-project "true"
         poetry config --list
