@@ -50,4 +50,7 @@ jobs:
         fi
         poetry config virtualenvs.create "true"
         poetry config virtualenvs.in-project "true"
-        poetry config --list
+
+    - name: install dependencies
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root

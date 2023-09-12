@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "omuse-pop-model"
+version = "0.0.0"
+description = "A driver for POP simulations through OMUSE."
+license = "Apache-2.0"
+authors = [
+  "Lucas Esclapez <l.esclapez@esciencecenter.nl>"
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "^1.20.0"
+toml = ">=0.10.0"
+oceansdb = "^0.8.14"
