@@ -13,6 +13,47 @@ concurrency:
 
 jobs:
 
+  Formatting:
+    runs-on: ubuntu-latest
+    steps:  
+    - uses: actions/checkout@v4
+      with:
+        ref: main
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: cache poetry
+      uses: actions/cache@v3
+      with:
+        path: ~/.local-${{ matrix.os }}
+        key: poetry-1.6.0
+
+    - name: install poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
+        if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
+          echo "/Users/runner/.local/bin" >> $GITHUB_PATH
+          export PATH="/Users/runner/.local/bin:$PATH"
+        fi
+        poetry config virtualenvs.create "true"
+        poetry config virtualenvs.in-project "true"
+
+    - name: install dev deps only
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      run: poetry install --only dev
+
+    - name: Formatting with black
+      run: poetry run black --check .
+
+    - name: Sort import
+      run: poetry run isort --check-only --diff .
+
+    - name: Lint with flake8
+      run: poetry run flake8 .
+
   build-deps:
     strategy:
       matrix:
@@ -20,6 +61,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.os }}
+    needs: Formatting
 
     steps:
     - uses: actions/checkout@v4
