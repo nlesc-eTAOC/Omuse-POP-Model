@@ -18,3 +18,11 @@ omuse-devel = { path = "./Submodules/omuse", develop = true }
 black = {version = "^23.1"}
 flake8 = "^4.0.1"
 isort = "^5.9.3"
+
+[tool.black]
+line-length = 79
+target-version = ['py39']
+preview-string-processing = true
+
+[tool.isort]
+profile = "black"
