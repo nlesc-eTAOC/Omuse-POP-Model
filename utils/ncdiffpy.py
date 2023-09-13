@@ -5,16 +5,19 @@ from netCDF4 import Dataset
 
 
 def compNCDF(NetCDF1, NetCDF2, eps):
+    # Open NetCDF files
     Dataset1 = Dataset(NetCDF1, "r")
     Dataset2 = Dataset(NetCDF2, "r")
 
-    VariablesNetCDF1 = [v.strip() for v in list(Dataset1.variables)]
-    VariablesNetCDF2 = [v.strip() for v in list(Dataset2.variables)]
-    VariablesNetCDF1.sort()
-    VariablesNetCDF2.sort()
+    # Check variables consistency
+    VarsNetCDF1 = [v.strip() for v in list(Dataset1.variables)]
+    VarsNetCDF2 = [v.strip() for v in list(Dataset2.variables)]
+    VarsNetCDF1.sort()
+    VarsNetCDF2.sort()
 
-    assert VariablesNetCDF1 == VariablesNetCDF2
+    assert VarsNetCDF1 == VarsNetCDF2
 
+    # Compute and print l2norm error for each variables
     filesAgree = True
 
     print(
@@ -22,7 +25,7 @@ def compNCDF(NetCDF1, NetCDF2, eps):
             "Variable", "Abs. Diff", "Rel. Diff [%]"
         )
     )
-    for Var in VariablesNetCDF1:
+    for Var in VarsNetCDF1:
         NetCDF_array1 = Dataset1[Var][:]
         NetCDF_array2 = Dataset2[Var][:]
 
@@ -44,6 +47,11 @@ def compNCDF(NetCDF1, NetCDF2, eps):
 
         filesAgree = filesAgree and l2norm < eps
 
+    # Clean-up
+    Dataset1.close()
+    Dataset2.close()
+
+    # Handle comparison result
     if filesAgree:
         print("NetCDF files agree !")
     else:
