@@ -91,6 +91,7 @@ jobs:
       if: runner.os == 'macOS'
       run: |
           ln -s /usr/local/bin/gfortran-10 /usr/local/bin/gfortran
+          gfortran -v
 
     - name: install poetry
       run: |
