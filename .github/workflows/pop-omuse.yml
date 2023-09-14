@@ -90,9 +90,7 @@ jobs:
     - name: install system deps
       if: runner.os == 'macOS'
       run: |
-          gfortran -v
-          brew reinstall gcc || true
-          gfortran -v
+          ln -s /usr/local/bin/gfortran-10 /usr/local/bin/gfortran
 
     - name: install poetry
       run: |
