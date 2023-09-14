@@ -87,6 +87,13 @@ jobs:
         path: ~/.local-${{ matrix.os }}
         key: poetry-1.6.0
 
+    - name: install system deps
+      if: runner.os == 'macOS'
+      run: |
+          gfortran -v
+          brew reinstall gcc || true
+          gfortran -v
+
     - name: install poetry
       run: |
         curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
