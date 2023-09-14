@@ -44,7 +44,7 @@ jobs:
 
     - name: install deps
       if: steps.cache-deps.outputs.cache-hit != 'true'
-      run: poetry install
+      run: poetry install --no-interaction --no-root
 
     - name: Formatting with black
       run: poetry run black --check --exclude Submodules .
