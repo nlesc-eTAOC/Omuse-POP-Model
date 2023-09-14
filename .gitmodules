@@ -1,3 +1,6 @@
 [submodule "Submodules/omuse"]
 	path = Submodules/omuse
 	url = https://github.com/omuse-geoscience/omuse
+[submodule "Submodules/amuse"]
+	path = Submodules/amuse
+	url = https://github.com/amusecode/amuse
