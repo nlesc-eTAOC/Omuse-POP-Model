@@ -14,7 +14,7 @@ python = "^3.9"
 numpy = "^1.20.0"
 toml = ">=0.10.0"
 oceansdb = "^0.8.14"
-amuse = "^23.3.0"
+amuse-framework = "^23.3.0"
 omuse-devel = { path = "./Submodules/omuse", develop = true }
 
 [tool.poetry.group.dev.dependencies]
