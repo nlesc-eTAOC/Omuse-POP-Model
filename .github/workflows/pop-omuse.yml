@@ -87,10 +87,22 @@ jobs:
         path: ~/.local-${{ matrix.os }}
         key: poetry-1.6.0
 
-    - name: install system deps
+    - name: install system deps [macOS]
       if: runner.os == 'macOS'
       run: |
-          ln -s /usr/local/bin/gfortran-13 /usr/local/bin/gfortran
+        brew install openmpi || true
+        ln -s /usr/local/bin/gfortran-13 /usr/local/bin/gfortran
+
+    - name: install system deps [ubuntu]
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get install libopenmpi-dev
+
+    - name: Install amuse-devel
+      run: |
+        git clone https://github.com/amusecode/amuse
+        cd amuse
+        pip install -e .
 
     - name: install poetry
       run: |
