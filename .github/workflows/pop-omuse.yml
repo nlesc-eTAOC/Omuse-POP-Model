@@ -58,7 +58,7 @@ jobs:
   build-deps:
     strategy:
       matrix:
-        os: [ macos-latest ]
+        os: [ ubuntu-latest, macos-latest ]
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.os }}
