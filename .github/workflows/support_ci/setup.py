@@ -22,7 +22,6 @@ install_requires = [
     'h5py>=1.1.0',
     'netCDF4>=1.4.0',
     'f90nml>=1.0.0',
-    'transiflow @ https://github.com/BIMAU/transiflow/tarball/master'
 ]
 description = 'The Oceanographic Multi-purpose Software Environment: a package for multi-physics and multi-scale earth science simulations.'
 with open("README.md", "r") as fh:
