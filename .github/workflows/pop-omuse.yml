@@ -118,4 +118,5 @@ jobs:
       if: steps.cache-deps.outputs.cache-hit != 'true'
       run: |
         cp .github/workflows/support_ci/pyproject.toml ./Submodules/omuse/
+        cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
         poetry install --no-interaction --no-root
