@@ -13,47 +13,59 @@ concurrency:
 
 jobs:
 
-  #  Formatting:
-  #    runs-on: ubuntu-latest
-  #    steps:  
-  #    - uses: actions/checkout@v4
-  #      with:
-  #        submodules: true
-  #        ref: main
-  #
-  #    - name: Set up Python
-  #      uses: actions/setup-python@v4
-  #      with:
-  #        python-version: '3.9'
-  #
-  #    - name: cache poetry
-  #      uses: actions/cache@v3
-  #      with:
-  #        path: ~/.local-${{ matrix.os }}
-  #        key: poetry-1.6.0
-  #
-  #    - name: install poetry
-  #      run: |
-  #        curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
-  #        if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
-  #          echo "/Users/runner/.local/bin" >> $GITHUB_PATH
-  #          export PATH="/Users/runner/.local/bin:$PATH"
-  #        fi
-  #        poetry config virtualenvs.create "true"
-  #        poetry config virtualenvs.in-project "true"
-  #
-  #    - name: install deps
-  #      if: steps.cache-deps.outputs.cache-hit != 'true'
-  #      run: poetry install --no-interaction --no-root
-  #
-  #    - name: Formatting with black
-  #      run: poetry run black --check --exclude Submodules .
-  #
-  #    - name: Sort import
-  #      run: poetry run isort --check-only --diff --skip Submodules .
-  #
-  #    - name: Lint with flake8
-  #      run: poetry run flake8 --exclude Submodules .
+  Formatting:
+    runs-on: ubuntu-latest
+    steps:  
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+        fetch-depth: 0
+        ref: main
+
+    - name: Set up JDK
+      uses: actions/setup-java@v3.9.0
+      with:
+        distribution: 'zulu' # See 'Supported distributions' for available options
+        java-version: '17'
+  
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+  
+    - name: cache poetry
+      uses: actions/cache@v3
+      with:
+        key: poetry-1.6.0
+
+    - name: install system deps
+      run: |
+        sudo apt-get install libopenmpi-dev
+
+    - name: Install amuse-devel
+      run: |
+        git clone https://github.com/amusecode/amuse
+        cd amuse
+        pip install -e .
+  
+    - name: install poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
+        poetry config virtualenvs.create "true"
+        poetry config virtualenvs.in-project "true"
+  
+    - name: install deps
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+  
+    - name: Formatting with black
+      run: poetry run black --check --exclude Submodules .
+  
+    - name: Sort import
+      run: poetry run isort --check-only --diff --skip Submodules .
+  
+    - name: Lint with flake8
+      run: poetry run flake8 --exclude Submodules .
 
   build-deps:
     strategy:
@@ -68,6 +80,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
+        fetch-depth: 0
         ref: main
 
     - name: Set up JDK
@@ -81,11 +94,11 @@ jobs:
       with:
         python-version: '3.9'
 
-    #- name: cache poetry
-    #  uses: actions/cache@v3
-    #  with:
-    #    path: ~/.local-${{ matrix.os }}
-    #    key: poetry-1.6.0
+    - name: cache poetry
+      uses: actions/cache@v3
+      with:
+        path: ~/.local-${{ matrix.os }}
+        key: poetry-1.6.0
 
     - name: install system deps [macOS]
       if: runner.os == 'macOS'
@@ -115,7 +128,7 @@ jobs:
         poetry config virtualenvs.in-project "true"
 
     - name: install dependencies
-      #if: steps.cache-deps.outputs.cache-hit != 'true'
+      if: steps.cache-deps.outputs.cache-hit != 'true'
       run: |
         cp .github/workflows/support_ci/pyproject.toml ./Submodules/omuse/
         cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
