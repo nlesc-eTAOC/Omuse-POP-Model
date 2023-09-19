@@ -1,6 +1,5 @@
 [build-system]
-build-backend = 'setuptools.build_meta'
-requires = [ "setuptools>=62.0.0", "setuptools_scm", "pip>=19.0.0", "wheel", "numpy", "amuse" ]
+requires = [ "setuptools>=62.0.0", "setuptools_scm", "pip>=19.0.0", "wheel", "numpy", "amuse-framework" ]
 
 [tool.setuptools_scm]
 write_to = "src/omuse/version.py"
