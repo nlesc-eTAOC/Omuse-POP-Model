@@ -136,3 +136,9 @@ jobs:
         cp .github/workflows/support_ci/pyproject.toml ./Submodules/omuse/
         cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
         poetry install --no-interaction --no-root
+
+    - name: install opsicl
+      run: poetry install --no-interaction
+
+    - name: run opsicl tests
+      run: poetry run pytest
