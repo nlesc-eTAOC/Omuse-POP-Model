@@ -19,7 +19,7 @@ class popsicl:
     def init_popsicl(self, nworkers: int, mode: str, nml_file: str):
         self._mode = mode
         self._nworkers = nworkers
-        self._p = POP(
+        self.p = POP(
             number_of_workers=nworkers,
             mode=mode,
             namelist_file=nml_file,
@@ -29,4 +29,7 @@ class popsicl:
     def copy_init_popsicl(self, popsicl):
         self._mode = popsicl._mode
         self._nworkers = popsicl._nworkers
-        self._p = popsicl._p
+        self.p = popsicl.p
+
+    def name_of_the_worker(self):
+        return self.p.name_of_the_worker(self._mode)

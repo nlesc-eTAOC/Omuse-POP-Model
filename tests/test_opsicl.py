@@ -11,3 +11,4 @@ def test_popinit():
     """Test pop instance"""
     mode = "96x120x12"
     cola = popsicl(nworkers=1, mode=mode, nml_file="./tests/poptest_in")
+    print(cola.name_of_the_worker())
