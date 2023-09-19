@@ -62,13 +62,13 @@ jobs:
         poetry install --no-interaction --no-root
   
     - name: Formatting with black
-      run: poetry run black --check --exclude Submodules .
+      run: poetry run black --check .
   
     - name: Sort import
-      run: poetry run isort --check-only --diff --skip Submodules .
+      run: poetry run isort --check-only --diff .
   
     - name: Lint with flake8
-      run: poetry run flake8 --exclude Submodules .
+      run: poetry run flake8 --exclude "Submodules, amuse, .venv, .github" .
 
   build-deps:
     strategy:
