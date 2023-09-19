@@ -81,11 +81,11 @@ jobs:
       with:
         python-version: '3.9'
 
-    - name: cache poetry
-      uses: actions/cache@v3
-      with:
-        path: ~/.local-${{ matrix.os }}
-        key: poetry-1.6.0
+    #- name: cache poetry
+    #  uses: actions/cache@v3
+    #  with:
+    #    path: ~/.local-${{ matrix.os }}
+    #    key: poetry-1.6.0
 
     - name: install system deps [macOS]
       if: runner.os == 'macOS'
@@ -115,7 +115,7 @@ jobs:
         poetry config virtualenvs.in-project "true"
 
     - name: install dependencies
-      if: steps.cache-deps.outputs.cache-hit != 'true'
+      #if: steps.cache-deps.outputs.cache-hit != 'true'
       run: |
         cp .github/workflows/support_ci/pyproject.toml ./Submodules/omuse/
         cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
