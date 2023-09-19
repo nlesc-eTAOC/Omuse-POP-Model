@@ -1,10 +1,11 @@
 # Use oceanDB data
-import oceansdb as odb
 import argparse
 import csv
-import numpy
-from matplotlib import pyplot
 from itertools import product
+
+import numpy
+import oceansdb as odb
+from matplotlib import pyplot
 
 
 def depth_levels(N, stretch_factor=1.8):
@@ -13,7 +14,9 @@ def depth_levels(N, stretch_factor=1.8):
     if stretch_factor == 0:
         return z
     else:
-        return 1 - numpy.tanh(stretch_factor * (1 - z)) / numpy.tanh(stretch_factor)
+        return 1 - numpy.tanh(stretch_factor * (1 - z)) / numpy.tanh(
+            stretch_factor
+        )
 
 
 def getGrid(xdeg, ydeg):
@@ -51,7 +54,8 @@ if __name__ == "__main__":
     # Parse input
     # ---------------
     parser = argparse.ArgumentParser(
-        description="A tool to generate KMT field for Omuse-POP topography from ocean's DB data. \nDefault parameters give a 3 deg grid over the entire globe."
+        description="A tool to generate KMT field for Omuse-POP topography from ocean's DB data. \
+            \nDefault parameters give a 3 deg grid over the entire globe."
     )
     parser.add_argument(
         "--Nx",
@@ -144,7 +148,9 @@ if __name__ == "__main__":
     # Get the topography out of ocean's DB
     # interpolating on the grid
     with odb.ETOPO() as depth_db:
-        real_depth = depth_db["topography"].extract(lat=ydeg, lon=xdeg)["height"]
+        real_depth = depth_db["topography"].extract(lat=ydeg, lon=xdeg)[
+            "height"
+        ]
 
     # Compute the KMT field
     kmt = numpy.zeros((Nx, Ny), dtype=int)
