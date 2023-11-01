@@ -121,6 +121,14 @@ jobs:
         git clone https://github.com/amusecode/amuse
         cd amuse
         pip install -e .
+        if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
+          sed -i "#NETCDF_LIBS#s#.*#NETCDF_LIBS=-L/usr/local/Cellar/netcdf/4.9.2_1/lib -lnetcdf#" ./amuse/config.mk
+          sed -i "#NETCDFF_FLAGS#s#.*#NETCDFF_FLAGS=-I/opt/homebrew/Cellar/netcdf-fortran/4.6.1/include#" ./amuse/config.mk
+          sed -i "#NETCDFF_LIBS#s#.*#NETCDFF_LIBS=-L/opt/homebrew/Cellar/netcdf-fortran/4.6.1/lib -lnetcdff#" ./amuse/config.mk
+        fi
+        if [ "${{ matrix.os }}" == 'ubuntu-latest' ]; then \
+          which ncdump
+        fi
 
     - name: install poetry
       run: |
@@ -142,12 +150,9 @@ jobs:
     - name: build pop workers
       run: |
         cat .github/workflows/support_ci/makefile_help >> ./Submodules/omuse/src/omuse/community/pop/Makefile
-        sed -i "#NETCDF_LIBS#s#.*#NETCDF_LIBS=-L/usr/local/Cellar/netcdf/4.9.2_1/lib -lnetcdf#" ./amuse/config.mk
-        sed -i "#NETCDFF_FLAGS#s#.*#NETCDFF_FLAGS=-I/opt/homebrew/Cellar/netcdf-fortran/4.6.1/include#" ./amuse/config.mk
-        sed -i "#NETCDFF_LIBS#s#.*#NETCDFF_LIBS=-L/opt/homebrew/Cellar/netcdf-fortran/4.6.1/lib -lnetcdff#" ./amuse/config.mk
         cd ./Submodules/omuse/src/omuse/community/pop
         make help
-        make -j4
+        make DOWNLOAD_CODES=1 -j4
 
     - name: install tamspop
       run: poetry install --no-interaction
