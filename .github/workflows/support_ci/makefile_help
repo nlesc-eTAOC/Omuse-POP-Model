@@ -1,0 +1,6 @@
+
+help:
+	@echo "TARGETS ${TARGETS}"
+	@echo "AMUSE dir ${AMUSE_DIR}"
+	@echo "POP flags: ${POPFFLAGS}"
+	@echo "NetCDF-Fortran include: $(NETCDFF_FLAGS)"

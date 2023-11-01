@@ -108,11 +108,13 @@ jobs:
       run: |
         brew install openmpi || true
         ln -s /usr/local/bin/gfortran-13 /usr/local/bin/gfortran
+        brew install netcdf netcdf-fortran || true
 
     - name: install system deps [ubuntu]
       if: runner.os == 'Linux'
       run: |
         sudo apt-get install libopenmpi-dev
+        sudo apt-get install libnetcdf-dev
 
     - name: Install amuse-devel
       run: |
@@ -137,8 +139,14 @@ jobs:
         cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
         poetry install --no-interaction --no-root
 
-    - name: install opsicl
+    - name: build pop workers
+      run: |
+        cat .github/workflows/support_ci/makefile_help >> ./Submodules/omuse/src/omuse/community/pop/Makefile
+        cd ./Submodules/omuse/src/omuse/community/pop
+        make help
+
+    - name: install tamspop
       run: poetry install --no-interaction
 
-    - name: run opsicl tests
+    - name: run tamspop tests
       run: poetry run pytest ./tests
