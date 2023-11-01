@@ -1,8 +1,9 @@
-from omuse.community.pop.interface import POP 
+from omuse.community.pop.interface import POP
 from omuse.units import units
 import numpy as np
 
-def depth_levels(N:int, stretch_factor:float = 1.8) -> np.ndarray:
+
+def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
     """Set linear or streched depth level grid on [0:1].
 
     Args:
@@ -18,26 +19,30 @@ def depth_levels(N:int, stretch_factor:float = 1.8) -> np.ndarray:
     else:
         return 1 - np.tanh(stretch_factor * (1 - z)) / np.tanh(stretch_factor)
 
-def getPOPinstance(nworkers: int = 2,
-                   Nx : int = 120,
-                   Ny : int = 56,
-                   Nz : int = 12,
-                   nml_file : str = "./pop_in") -> POP:
+
+def getPOPinstance(
+    nworkers: int = 2,
+    Nx: int = 120,
+    Ny: int = 56,
+    Nz: int = 12,
+    nml_file: str = "./pop_in",
+    topo_file: str = None,
+) -> POP:
     """Return an instance of POP."""
-    mode = "{}x{}x{}".format(Nx,Ny,Nz)
-    p = POP(number_of_workers = nworkers,
-            mode = mode,
-            nml_file = nml_file,
-            redirection = "none")
+    mode = "{}x{}x{}".format(Nx, Ny, Nz)
+    p = POP(
+        number_of_workers=nworkers,
+        mode=mode,
+        namelist_file=nml_file,
+        redirection="none",
+    )
 
     # Prepare grid data
-    levels = depth_levels(Nz+1) * 5000 | units.m
+    levels = depth_levels(Nz + 1) * 5000 | units.m
     depth = np.zeros((Nx, Ny), dtype=int)
-    depth_in = np.loadtxt("./KMT_{}_{}.csv".format(Nx,Ny),
-                          delimiter=",",
-                          dtype=int)
+    depth_in = np.loadtxt(topo_file, delimiter=",", dtype=int)
     dz = levels[1:] - levels[:-1]
 
     p.parameters.topography_option = "amuse"
-    p.parameters.depth_index = np.flip(depth_in.T,1)
+    p.parameters.depth_index = np.flip(depth_in.T, 1)
     p.parameters.horiz_grid_option = "amuse"
