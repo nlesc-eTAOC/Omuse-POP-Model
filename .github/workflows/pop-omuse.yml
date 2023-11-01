@@ -122,9 +122,11 @@ jobs:
         cd amuse
         pip install -e .
         if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
+          cat ./config.mk
           sed -i '' "#NETCDF_LIBS#s#.*#NETCDF_LIBS=-L/usr/local/Cellar/netcdf/4.9.2_1/lib -lnetcdf#" ./config.mk
           sed -i '' "#NETCDFF_FLAGS#s#.*#NETCDFF_FLAGS=-I/opt/homebrew/Cellar/netcdf-fortran/4.6.1/include#" ./config.mk
           sed -i '' "#NETCDFF_LIBS#s#.*#NETCDFF_LIBS=-L/opt/homebrew/Cellar/netcdf-fortran/4.6.1/lib -lnetcdff#" ./config.mk
+          cat ./config.mk
         fi
         if [ "${{ matrix.os }}" == 'ubuntu-latest' ]; then \
           which ncdump
@@ -152,6 +154,7 @@ jobs:
         cat .github/workflows/support_ci/makefile_help >> ./Submodules/omuse/src/omuse/community/pop/Makefile
         cd ./Submodules/omuse/src/omuse/community/pop
         make help
+        pip list
         make DOWNLOAD_CODES=1 -j4
 
     - name: install tamspop
