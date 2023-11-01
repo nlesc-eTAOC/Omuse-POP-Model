@@ -1,9 +1,6 @@
-import time
-import numpy as np
 from pytams.fmodel import ForwardModel
+
 from tamspop.poputils import getPOPinstance
-from omuse.community.pop.interface import POP
-from omuse.units import units
 
 
 class OmusePOPModel(ForwardModel):
@@ -17,8 +14,9 @@ class OmusePOPModel(ForwardModel):
 
     def advance(self, dt: float, forcingAmpl: float):
         """Override the template."""
-        print(self._nml_file)
         p = getPOPinstance(nml_file=self._nml_file, topo_file=self._topo_file)
+        tnow = p.model_time
+        print(tnow)
 
     def getCurState(self):
         """Override the template."""

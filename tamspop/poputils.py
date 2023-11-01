@@ -1,6 +1,6 @@
+import numpy as np
 from omuse.community.pop.interface import POP
 from omuse.units import units
-import numpy as np
 
 
 def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
@@ -39,10 +39,12 @@ def getPOPinstance(
 
     # Prepare grid data
     levels = depth_levels(Nz + 1) * 5000 | units.m
-    depth = np.zeros((Nx, Ny), dtype=int)
     depth_in = np.loadtxt(topo_file, delimiter=",", dtype=int)
     dz = levels[1:] - levels[:-1]
 
     p.parameters.topography_option = "amuse"
+    p.parameters.vert_grid_option = "amuse"
     p.parameters.depth_index = np.flip(depth_in.T, 1)
+    p.parameters.vertical_layer_thicknesses = dz
+
     p.parameters.horiz_grid_option = "amuse"
