@@ -27,11 +27,11 @@ isort = "^5.9.3"
 line-length = 79
 target-version = ['py39']
 preview-string-processing = true
-exclude = 'Submodules|.venv|.github'
+exclude = 'Submodules|.venv|.github|amuse'
 
 [tool.isort]
 profile = "black"
-skip = ["Submodules", ".venv", ".github"]
+skip = ["Submodules", "amuse", ".venv", ".github"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
