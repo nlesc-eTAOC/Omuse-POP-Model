@@ -73,7 +73,7 @@ jobs:
   build-deps:
     strategy:
       matrix:
-        os: [ macos-latest ]
+        os: [ macos-latest, ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.os }}
@@ -114,7 +114,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get install libopenmpi-dev
-        sudo apt-get install libnetcdf-dev
+        sudo apt-get install libnetcdf-dev libnetcdff-dev
 
     - name: Install amuse-devel
       run: |
@@ -127,7 +127,8 @@ jobs:
           sed -i '' "s#.*NETCDFF_LIBS.*#NETCDFF_LIBS=-L/usr/local/Cellar/netcdf-fortran/4.6.1/lib -lnetcdff#" ./config.mk
         fi
         if [ "${{ matrix.os }}" == 'ubuntu-latest' ]; then \
-          which ncdump
+          ls /usr/include
+          ls /usr/lib
         fi
 
     - name: install poetry
@@ -158,6 +159,9 @@ jobs:
         cd ./Submodules/omuse/src/omuse/community/pop
         if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
           sed -i '' "s#.*TARGETS :=.*#TARGETS ?= \$(patsubst src_%, pop_worker_%, \${wildcard src_*})#" Makefile
+        fi
+        if [ "${{ matrix.os }}" == 'ubuntu-latest' ]; then \
+          sed -i "s#.*TARGETS :=.*#TARGETS ?= \$(patsubst src_%, pop_worker_%, \${wildcard src_*})#" Makefile
         fi
         make DOWNLOAD_CODES=1 TARGETS=pop_worker_120x56x12 -j4
 
