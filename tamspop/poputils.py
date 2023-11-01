@@ -21,7 +21,7 @@ def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
 
 
 def getPOPinstance(
-    nworkers: int = 2,
+    nworkers: int = 1,
     Nx: int = 120,
     Ny: int = 56,
     Nz: int = 12,

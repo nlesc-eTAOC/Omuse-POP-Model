@@ -11,10 +11,13 @@ class OmusePOPModel(ForwardModel):
         self._state = None
         self._nml_file = params.get("nml_file", "pop_in")
         self._topo_file = params.get("topo_file", None)
+        self._nProc_pop = params.get("nProc_POP", 1)
 
     def advance(self, dt: float, forcingAmpl: float):
         """Override the template."""
-        p = getPOPinstance(nml_file=self._nml_file, topo_file=self._topo_file)
+        p = getPOPinstance(nworkers = self._nProc_pop,
+                           nml_file=self._nml_file,
+                           topo_file=self._topo_file)
         tnow = p.model_time
         print(tnow)
 

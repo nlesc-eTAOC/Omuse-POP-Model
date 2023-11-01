@@ -19,6 +19,7 @@ def test_advanceModel():
     pop_params = {
         "nml_file": "./data/pop_in",
         "topo_file": "./data/KMT_120_56.csv",
+        "nProc_POP": 1,
     }
     fmodel = OmusePOPModel(params=pop_params)
     fmodel.advance(0.1, 0.1)

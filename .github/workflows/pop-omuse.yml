@@ -118,6 +118,7 @@ jobs:
 
     - name: Install amuse-devel
       run: |
+        echo $(nproc)
         git clone https://github.com/amusecode/amuse
         cd amuse
         pip install -e .
