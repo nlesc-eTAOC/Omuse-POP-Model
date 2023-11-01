@@ -73,11 +73,11 @@ jobs:
   build-deps:
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ macos-latest ]
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.os }}
-    needs: Formatting
+      ##needs: Formatting
 
     steps:
     - uses: actions/checkout@v4
