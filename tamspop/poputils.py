@@ -48,3 +48,5 @@ def getPOPinstance(
     p.parameters.vertical_layer_thicknesses = dz
 
     p.parameters.horiz_grid_option = "amuse"
+
+    return p
