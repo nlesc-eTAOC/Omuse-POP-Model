@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "opsicl"
+name = "Tamspop"
 version = "0.0.0"
-description = "A driver for POP simulations through OMUSE."
+description = "POP python TAMS model"
 license = "Apache-2.0"
 readme = "README.md"
 authors = [
   "Lucas Esclapez <l.esclapez@esciencecenter.nl>"
 ]
-packages = [{include = "opsicl"}]
+packages = [{include = "tamspop"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -15,7 +15,7 @@ numpy = "^1.20.0"
 toml = ">=0.10.0"
 oceansdb = "^0.8.14"
 amuse-framework = ">=23.3.0"
-transiflow = { git = "https://github.com/BIMAU/transiflow", branch = "master"}
+pyTAMS = { git = "https://github.com/nlesc-eTAOC/pyTAMS", branch = "main"}
 omuse-devel = { path = "./Submodules/omuse", develop = true }
 
 [tool.poetry.group.dev.dependencies]
@@ -27,11 +27,11 @@ isort = "^5.9.3"
 line-length = 79
 target-version = ['py39']
 preview-string-processing = true
-exclude = 'Submodules|amuse|.venv|.github'
+exclude = 'Submodules|.venv|.github'
 
 [tool.isort]
 profile = "black"
-skip = ["Submodules", "amuse", ".venv", ".github"]
+skip = ["Submodules", ".venv", ".github"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
