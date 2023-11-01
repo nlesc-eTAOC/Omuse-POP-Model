@@ -156,9 +156,10 @@ jobs:
       run: |
         cat .github/workflows/support_ci/makefile_help >> ./Submodules/omuse/src/omuse/community/pop/Makefile
         cd ./Submodules/omuse/src/omuse/community/pop
-        make help
-        pip list
-        make DOWNLOAD_CODES=1 -j4
+        if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
+          sed -i '' "s#.*TARGETS :=.*#TARGETS ?= \$(patsubst src_%, pop_worker_%, \${wildcard src_*})#" Makefile
+        fi
+        make DOWNLOAD_CODES=1 TARGETS=pop_worker_120x56x12 -j4
 
     - name: run tamspop tests
       run: poetry run pytest ./tests
