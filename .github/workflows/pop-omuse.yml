@@ -122,11 +122,9 @@ jobs:
         cd amuse
         pip install -e .
         if [ "${{ matrix.os }}" == 'macos-latest' ]; then \
-          cat ./config.mk
           sed -i '' "s#.*NETCDF_LIBS.*#NETCDF_LIBS=-L/usr/local/Cellar/netcdf/4.9.2_1/lib -lnetcdf#" ./config.mk
           sed -i '' "s#.*NETCDFF_FLAGS.*#NETCDFF_FLAGS=-I/opt/homebrew/Cellar/netcdf-fortran/4.6.1/include#" ./config.mk
           sed -i '' "s#.*NETCDFF_LIBS.*#NETCDFF_LIBS=-L/opt/homebrew/Cellar/netcdf-fortran/4.6.1/lib -lnetcdff#" ./config.mk
-          cat ./config.mk
         fi
         if [ "${{ matrix.os }}" == 'ubuntu-latest' ]; then \
           which ncdump
@@ -148,6 +146,11 @@ jobs:
         cp .github/workflows/support_ci/pyproject.toml ./Submodules/omuse/
         cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
         poetry install --no-interaction --no-root
+        cd ./Submodules/omuse/
+        pip install -e .
+
+    - name: install tamspop
+      run: poetry install --no-interaction
 
     - name: build pop workers
       run: |
@@ -156,9 +159,6 @@ jobs:
         make help
         pip list
         make DOWNLOAD_CODES=1 -j4
-
-    - name: install tamspop
-      run: poetry install --no-interaction
 
     - name: run tamspop tests
       run: poetry run pytest ./tests
