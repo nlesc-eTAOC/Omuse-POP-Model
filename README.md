@@ -1,5 +1,4 @@
-# Omuse-POP Model
+# POP-Omuse MOdel - POPOMO
 
-This repository contains a driver for POP simulations through OMUSE,
-examples of basic simulations and a few tools to manage simulation
-setup and analysis.
+This repository contains a driver for POP simulations through OMUSE
+in the form compatible with the [TAMS](https://github.com/nlesc-eTAOC/pyTAMS) forward model.
