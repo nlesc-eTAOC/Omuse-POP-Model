@@ -32,11 +32,8 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-  
-    - name: cache poetry
-      uses: actions/cache@v3
-      with:
-        key: poetry-1.6.0
+        cache: poetry
+        cache-dependency-path: poetry.lock
 
     - name: install system deps
       run: |
@@ -48,14 +45,13 @@ jobs:
         cd amuse
         pip install -e .
   
-    - name: install poetry
+    - name: Install poetry
       run: |
         curl -sSL https://install.python-poetry.org | python3 - --version 1.6.0
         poetry config virtualenvs.create "true"
         poetry config virtualenvs.in-project "true"
   
-    - name: install deps
-      if: steps.cache-deps.outputs.cache-hit != 'true'
+    - name: Install dependencies
       run: |
         cp .github/workflows/support_ci/pyproject.toml ./Submodules/omuse/
         cp .github/workflows/support_ci/setup.py ./Submodules/omuse/
@@ -74,10 +70,11 @@ jobs:
     strategy:
       matrix:
         os: [ macos-latest, ubuntu-latest ]
+        python-version: ['3.9', '3.10']
 
     runs-on: ${{ matrix.os }}
     name: build-${{ matrix.os }}
-      ##needs: Formatting
+    needs: Formatting
 
     steps:
     - uses: actions/checkout@v4
@@ -95,13 +92,9 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
-
-    - name: cache poetry
-      uses: actions/cache@v3
-      with:
-        path: ~/.local-${{ matrix.os }}
-        key: poetry-1.6.0
+        python-version: ${{ matrix.python-version }}
+        cache: poetry
+        cache-dependency-path: poetry.lock
 
     - name: install system deps [macOS]
       if: runner.os == 'macOS'
@@ -126,10 +119,6 @@ jobs:
           sed -i '' "s#.*NETCDF_LIBS.*#NETCDF_LIBS=-L/usr/local/Cellar/netcdf/4.9.2_1/lib -lnetcdf#" ./config.mk
           sed -i '' "s#.*NETCDFF_FLAGS.*#NETCDFF_FLAGS=-I/usr/local/Cellar/netcdf-fortran/4.6.1/include#" ./config.mk
           sed -i '' "s#.*NETCDFF_LIBS.*#NETCDFF_LIBS=-L/usr/local/Cellar/netcdf-fortran/4.6.1/lib -lnetcdff#" ./config.mk
-        fi
-        if [ "${{ matrix.os }}" == 'ubuntu-latest' ]; then \
-          ls /usr/include
-          ls /usr/lib
         fi
 
     - name: install poetry
