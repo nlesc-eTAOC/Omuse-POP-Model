@@ -32,7 +32,7 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-        cache: poetry
+        cache: 'pip' # caching pip dependencies
 
     - name: install system deps
       run: |
@@ -92,7 +92,7 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-        cache: poetry
+        cache: 'pip' # caching pip dependencies
 
     - name: install system deps [macOS]
       if: runner.os == 'macOS'
