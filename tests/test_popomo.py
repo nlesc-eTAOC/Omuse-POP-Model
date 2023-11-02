@@ -1,5 +1,5 @@
-from tamspop import __version__
-from tamspop.tamspop import OmusePOPModel
+from popomo import __version__
+from popomo.popomo import POPOmuseModel
 
 
 def test_version():
@@ -8,18 +8,18 @@ def test_version():
 
 
 def test_initModel():
-    """Init an Omuse-POP model."""
+    """Init an POPOmuseModel model."""
     pop_params = {}
-    fmodel = OmusePOPModel(params=pop_params)
-    assert fmodel.name() == "OmusePOPModel"
+    fmodel = POPOmuseModel(params=pop_params)
+    assert fmodel.name() == "POPOmuseModel"
 
 
 def test_advanceModel():
-    """Advance an Omuse-POP model over a step."""
+    """Advance an POP-Omuse model over a step."""
     pop_params = {
         "nml_file": "./data/pop_in",
         "topo_file": "./data/KMT_120_56.csv",
         "nProc_POP": 1,
     }
-    fmodel = OmusePOPModel(params=pop_params)
+    fmodel = POPOmuseModel(params=pop_params)
     fmodel.advance(0.1, 0.1)

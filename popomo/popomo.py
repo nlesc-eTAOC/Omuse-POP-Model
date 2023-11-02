@@ -1,10 +1,9 @@
 from pytams.fmodel import ForwardModel
+from popomo.poputils import getPOPinstance
 
-from tamspop.poputils import getPOPinstance
 
-
-class OmusePOPModel(ForwardModel):
-    """A forward model for pyTAMS based on Omuse-POP."""
+class POPOmuseModel(ForwardModel):
+    """A forward model for pyTAMS based on POP-Omuse."""
 
     def __init__(self, params: dict = None) -> None:
         """Override the template."""
@@ -37,4 +36,4 @@ class OmusePOPModel(ForwardModel):
 
     def name(self):
         """Return the model name."""
-        return "OmusePOPModel"
+        return "POPOmuseModel"
