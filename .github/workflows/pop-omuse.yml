@@ -74,7 +74,7 @@ jobs:
         python-version: ['3.9', '3.10']
 
     runs-on: ${{ matrix.os }}
-    name: build-${{ matrix.os }}
+    name: build-${{ matrix.os }}-Python${{ matrix.python-version }}
     needs: Formatting
 
     steps:
@@ -140,7 +140,7 @@ jobs:
         cd ./Submodules/omuse/
         pip install -e .
 
-    - name: install tamspop
+    - name: install popomo
       run: poetry install --no-interaction
 
     - name: build pop workers
@@ -155,5 +155,5 @@ jobs:
         fi
         make DOWNLOAD_CODES=1 TARGETS=pop_worker_120x56x12 -j4
 
-    - name: run tamspop tests
+    - name: run popomo tests
       run: poetry run pytest ./tests
