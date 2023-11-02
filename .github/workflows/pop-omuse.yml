@@ -33,7 +33,6 @@ jobs:
       with:
         python-version: '3.9'
         cache: poetry
-        cache-dependency-path: poetry.lock
 
     - name: install system deps
       run: |
@@ -94,7 +93,6 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         cache: poetry
-        cache-dependency-path: poetry.lock
 
     - name: install system deps [macOS]
       if: runner.os == 'macOS'
