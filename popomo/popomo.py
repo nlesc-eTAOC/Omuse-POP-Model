@@ -7,7 +7,6 @@ from pytams.fmodel import ForwardModel
 from popomo.poputils import (
     getLastRestart,
     getPOPinstance,
-    plot_depth,
     setCheckPoint,
     setRestart,
 )
