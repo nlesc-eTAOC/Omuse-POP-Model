@@ -3,6 +3,7 @@ from matplotlib import pyplot
 from omuse.community.pop.interface import POP
 from omuse.units import units
 
+
 def plot_globe(p, value, unit, name, elements=False):
     """Plot value of the globe."""
     mask = p.elements.depth.value_in(units.km) == 0
@@ -30,19 +31,24 @@ def plot_globe(p, value, unit, name, elements=False):
 
     pyplot.contourf(x, y, value.T)
 
-    pyplot.xticks([-180, -120, -60, 0, 60, 120, 180],
-                  ['180°W', '120°W', '60°W', '0°', '60°E', '120°E', '180°E'])
-    pyplot.yticks([-60, -30, 0, 30, 60],
-                  ['60°S', '30°S', '0°', '30°N', '60°N'])
+    pyplot.xticks(
+        [-180, -120, -60, 0, 60, 120, 180],
+        ["180°W", "120°W", "60°W", "0°", "60°E", "120°E", "180°E"],
+    )
+    pyplot.yticks(
+        [-60, -30, 0, 30, 60], ["60°S", "30°S", "0°", "30°N", "60°N"]
+    )
     pyplot.colorbar(label=unit)
     pyplot.ylim(y[1], y[-2])
     pyplot.savefig(name)
     pyplot.close()
 
+
 def plot_depth(p, name="depth.png"):
     """Plot the ocean depth level."""
     h = p.nodes.depth.value_in(units.km)
     plot_globe(p, h, "km", name)
+
 
 def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
     """Set linear or streched depth level grid on [0:1].
@@ -69,7 +75,9 @@ def getPOPinstance(
 ) -> POP:
     """Return an instance of POP."""
     assert domain_dict is not None
-    mode = "{}x{}x{}".format(domain_dict["Nx"], domain_dict["Ny"], domain_dict["Nz"])
+    mode = "{}x{}x{}".format(
+        domain_dict["Nx"], domain_dict["Ny"], domain_dict["Nz"]
+    )
     p = POP(
         number_of_workers=nworkers,
         mode=mode,
@@ -94,3 +102,20 @@ def getPOPinstance(
     p.parameters.latmax = domain_dict["latMax"]
 
     return p
+
+
+def setCheckPoint(p: POP, freq: int, chkprefix: str):
+    """Set the POP instance checkpointing options."""
+    # Set restart such that a single restart is called at
+    # the end of the advance function.
+    p.parameters.restart_option = "nhour"
+    p.parameters.restart_freq_option = freq
+    p.parameters.restart_file = chkprefix
+
+
+def setRestart(p: POP, rstFile: str):
+    p.parameters.ts_file = rstFile
+
+
+def getLastRestart(p: POP) -> str:
+    return p.get_last_restart()
