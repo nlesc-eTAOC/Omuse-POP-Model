@@ -9,7 +9,6 @@ from popomo.poputils import (
     getPOPinstance,
     setCheckPoint,
     setRestart,
-    plot_depth
 )
 
 

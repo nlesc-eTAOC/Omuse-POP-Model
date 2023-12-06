@@ -1,9 +1,11 @@
-import numpy as np
 import matplotlib
-matplotlib.use('agg')
+import numpy as np
 from matplotlib import pyplot
 from omuse.community.pop.interface import POP
 from omuse.units import units
+
+matplotlib.use("agg")
+
 
 class POPUtilsError(Exception):
     """Exception class for POPUtils."""
@@ -13,7 +15,7 @@ class POPUtilsError(Exception):
 
 def plot_globe(p, value, unit, name, elements=False):
     """Plot value of the globe."""
-    matplotlib.use('agg')
+    matplotlib.use("agg")
     mask = p.elements.depth.value_in(units.km) == 0
     value = np.ma.array(value, mask=mask)
 
@@ -97,10 +99,12 @@ def getPOPinstance(
     # Grid option: either amuse or pop_files
     grid_option = domain_dict.get("grid_option", "amuse")
 
-    if (grid_option == "amuse"):
+    if grid_option == "amuse":
         # Prepare grid data
         levels = depth_levels(domain_dict["Nz"] + 1) * 5000 | units.m
-        depth_in = np.loadtxt(domain_dict["topography_file"], delimiter=",", dtype=int)
+        depth_in = np.loadtxt(
+            domain_dict["topography_file"], delimiter=",", dtype=int
+        )
         dz = levels[1:] - levels[:-1]
 
         p.parameters.topography_option = "amuse"
@@ -109,12 +113,12 @@ def getPOPinstance(
         p.parameters.vertical_layer_thicknesses = dz
 
         p.parameters.horiz_grid_option = "amuse"
-        p.parameters.lonmin = domain_dict.get("lonmin",-180) | units.deg
-        p.parameters.lonmax = domain_dict.get("lonmax",180) | units.deg
-        p.parameters.latmin = domain_dict.get("latmin",-84) | units.deg
-        p.parameters.latmax = domain_dict.get("latmax",84) | units.deg
+        p.parameters.lonmin = domain_dict.get("lonmin", -180) | units.deg
+        p.parameters.lonmax = domain_dict.get("lonmax", 180) | units.deg
+        p.parameters.latmin = domain_dict.get("latmin", -84) | units.deg
+        p.parameters.latmax = domain_dict.get("latmax", 84) | units.deg
 
-    elif (grid_option == "pop_files"):
+    elif grid_option == "pop_files":
         p.parameters.topography_option = "file"
         p.parameters.topography_file = domain_dict.get("topography_file", None)
         p.parameters.vert_grid_option = "file"
@@ -123,7 +127,9 @@ def getPOPinstance(
         p.parameters.horiz_grid_file = domain_dict.get("horiz_grid_file", None)
     else:
         raise POPUtilsError(
-                "Unknown grid_option {}. Can only be 'amuse' or 'pop_files'".format(grid_option)
+            "Unknown grid_option {}. Either 'amuse' or 'pop_files'".format(
+                grid_option
+            )
         )
 
     return p
