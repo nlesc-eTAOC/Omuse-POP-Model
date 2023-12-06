@@ -9,6 +9,7 @@ from popomo.poputils import (
     getPOPinstance,
     setCheckPoint,
     setRestart,
+    plot_depth
 )
 
 
@@ -20,26 +21,18 @@ class POPOmuseModel(ForwardModel):
         # In this model, the state is a pointer to a POP restart file
         self._state = None
         self._nml_file = params.get("nml_file", "pop_in")
-        self._topo_file = params.get("topo_file", None)
         self._nProc_pop = params.get("nProc_POP", 1)
-        self._popDomain = {
-            "lonMin": params.get("lonmin", -180) | units.deg,
-            "lonMax": params.get("lonmax", 180) | units.deg,
-            "latMin": params.get("latmin", -84) | units.deg,
-            "latMax": params.get("latmax", 84) | units.deg,
-            "Nx": params.get("Nx", 120),
-            "Ny": params.get("Ny", 56),
-            "Nz": params.get("Nz", 12),
-        }
+        self._popDomain = params.get("domain_dict", None)
+        assert self._popDomain is not None
 
         self.pop = None
         self.checkpoint_prefix = None
         if params.get("DB_save", False):
             nameDB = "{}.tdb".format(params.get("DB_prefix", "TAMS"))
             model = "pop_{}x{}x{}".format(
-                params.get("Nx", 120),
-                params.get("Ny", 56),
-                params.get("Nz", 12),
+                self._popDomain.get("Nx", 120),
+                self._popDomain.get("Ny", 56),
+                self._popDomain.get("Nz", 12),
             )
             checkpoint_path = "{}/trajectories/{}".format(nameDB, ioprefix)
             self.checkpoint_prefix = "{}/trajectories/{}/{}".format(
@@ -54,7 +47,6 @@ class POPOmuseModel(ForwardModel):
             self.pop = getPOPinstance(
                 nml_file=self._nml_file,
                 nworkers=self._nProc_pop,
-                topo_file=self._topo_file,
                 domain_dict=self._popDomain,
             )
             if self.checkpoint_prefix:

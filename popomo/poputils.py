@@ -1,11 +1,19 @@
 import numpy as np
+import matplotlib
+matplotlib.use('agg')
 from matplotlib import pyplot
 from omuse.community.pop.interface import POP
 from omuse.units import units
 
+class POPUtilsError(Exception):
+    """Exception class for POPUtils."""
+
+    pass
+
 
 def plot_globe(p, value, unit, name, elements=False):
     """Plot value of the globe."""
+    matplotlib.use('agg')
     mask = p.elements.depth.value_in(units.km) == 0
     value = np.ma.array(value, mask=mask)
 
@@ -70,11 +78,12 @@ def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
 def getPOPinstance(
     nworkers: int = 1,
     nml_file: str = "./pop_in",
-    topo_file: str = None,
     domain_dict: dict = None,
 ) -> POP:
     """Return an instance of POP."""
     assert domain_dict is not None
+
+    # Mode is based on resolution
     mode = "{}x{}x{}".format(
         domain_dict["Nx"], domain_dict["Ny"], domain_dict["Nz"]
     )
@@ -85,21 +94,37 @@ def getPOPinstance(
         redirection="none",
     )
 
-    # Prepare grid data
-    levels = depth_levels(domain_dict["Nz"] + 1) * 5000 | units.m
-    depth_in = np.loadtxt(topo_file, delimiter=",", dtype=int)
-    dz = levels[1:] - levels[:-1]
+    # Grid option: either amuse or pop_files
+    grid_option = domain_dict.get("grid_option", "amuse")
 
-    p.parameters.topography_option = "amuse"
-    p.parameters.vert_grid_option = "amuse"
-    p.parameters.depth_index = np.flip(depth_in.T, 1)
-    p.parameters.vertical_layer_thicknesses = dz
+    if (grid_option == "amuse"):
+        # Prepare grid data
+        levels = depth_levels(domain_dict["Nz"] + 1) * 5000 | units.m
+        depth_in = np.loadtxt(domain_dict["topography_file"], delimiter=",", dtype=int)
+        dz = levels[1:] - levels[:-1]
 
-    p.parameters.horiz_grid_option = "amuse"
-    p.parameters.lonmin = domain_dict["lonMin"]
-    p.parameters.lonmax = domain_dict["lonMax"]
-    p.parameters.latmin = domain_dict["latMin"]
-    p.parameters.latmax = domain_dict["latMax"]
+        p.parameters.topography_option = "amuse"
+        p.parameters.vert_grid_option = "amuse"
+        p.parameters.depth_index = np.flip(depth_in.T, 1)
+        p.parameters.vertical_layer_thicknesses = dz
+
+        p.parameters.horiz_grid_option = "amuse"
+        p.parameters.lonmin = domain_dict.get("lonmin",-180) | units.deg
+        p.parameters.lonmax = domain_dict.get("lonmax",180) | units.deg
+        p.parameters.latmin = domain_dict.get("latmin",-84) | units.deg
+        p.parameters.latmax = domain_dict.get("latmax",84) | units.deg
+
+    elif (grid_option == "pop_files"):
+        p.parameters.topography_option = "file"
+        p.parameters.topography_file = domain_dict.get("topography_file", None)
+        p.parameters.vert_grid_option = "file"
+        p.parameters.vert_grid_file = domain_dict.get("vert_grid_file", None)
+        p.parameters.horiz_grid_option = "file"
+        p.parameters.horiz_grid_file = domain_dict.get("horiz_grid_file", None)
+    else:
+        raise POPUtilsError(
+                "Unknown grid_option {}. Can only be 'amuse' or 'pop_files'".format(grid_option)
+        )
 
     return p
 
