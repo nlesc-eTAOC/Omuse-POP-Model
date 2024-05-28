@@ -1,24 +1,26 @@
 import os
+import signal
 import time
 
 import numpy as np
+import psutil as psu
 from omuse.units import units
 from pytams.fmodel import ForwardModel
-import psutil as psu
 
 from popomo.poputils import (
+    disableCheckPoint,
     getLastRestart,
     getPOPinstance,
     setCheckPoint,
-    disableCheckPoint,
     setRestart,
-    setStoichForcingAmpl
+    setStoichForcingAmpl,
 )
 from popomo.utils import (
-    remainingdaysincurrentmonth,
     daysincurrentyear,
     monthly_reference,
+    remainingdaysincurrentmonth,
 )
+
 
 class PopomoError(Exception):
     """Exception class for Popomo."""
@@ -29,9 +31,7 @@ class PopomoError(Exception):
 class POPOmuseModel(ForwardModel):
     """A forward model for pyTAMS based on POP-Omuse."""
 
-    def __init__(self,
-                 params: dict = None,
-                 ioprefix: str = None) -> None:
+    def __init__(self, params: dict = None, ioprefix: str = None) -> None:
         """Override the template."""
         # Stash away POP-specific parameters
         self._pop_params = params.get("pop", {})
@@ -40,7 +40,7 @@ class POPOmuseModel(ForwardModel):
         # Upon initialization, pass a initial solution if one is provided
         self._state = None
         init_file = self._pop_params.get("init_file", None)
-        if (init_file):
+        if init_file:
             assert os.path.exists(init_file) is True
             self._state = init_file
 
@@ -57,8 +57,10 @@ class POPOmuseModel(ForwardModel):
 
         # Database information
         self.checkpoint_prefix = None
-        if params.get("database",{}).get("DB_save", False):
-            nameDB = "{}.tdb".format(params.get("database",{}).get("DB_prefix", "TAMS"))
+        if params.get("database", {}).get("DB_save", False):
+            nameDB = "{}.tdb".format(
+                params.get("database", {}).get("DB_prefix", "TAMS")
+            )
             model = "pop_{}x{}x{}".format(
                 self._popDomain.get("Nx", 120),
                 self._popDomain.get("Ny", 56),
@@ -71,8 +73,7 @@ class POPOmuseModel(ForwardModel):
             if not os.path.exists(self.run_folder):
                 os.mkdir(self.run_folder)
 
-    def advance(self, dt: float,
-                forcingAmpl: float):
+    def advance(self, dt: float, forcingAmpl: float):
         """Override the template."""
         # On the first call to advance, initialize POP
         if self.pop is None:
@@ -88,7 +89,9 @@ class POPOmuseModel(ForwardModel):
             if self._state is not None:
                 setRestart(self.pop, self._state)
                 if not os.path.exists(self._state):
-                    raise PopomoError("State file {} do not exists".format(self._state))
+                    raise PopomoError(
+                        "State file {} do not exists".format(self._state)
+                    )
             print("Start advancing with init. state {}".format(self._state))
 
         # Time stepping is month based, so exact length varies
@@ -96,16 +99,24 @@ class POPOmuseModel(ForwardModel):
         date = self.pop.get_model_date()
         days_left = remainingdaysincurrentmonth(date)
         year_length = daysincurrentyear(date)
-        tnow  = tstart
+        tnow = tstart
         dt_d = days_left * 1 | units.day
         tstoich_end = tstart + dt_d
 
-        print("Start stoich step: tstart = {}, t_end = {}".format(tstart.value_in(units.day), tstoich_end.value_in(units.day)))
+        print(
+            "Start stoich step: tstart = {}, t_end = {}".format(
+                tstart.value_in(units.day), tstoich_end.value_in(units.day)
+            )
+        )
 
         # Set stoichastic amplitude
         self._noise = np.random.randn(1)
-        sfwf_ampl = forcingAmpl * np.sqrt(dt_d.value_in(units.day)/year_length) * self._noise
-        setStoichForcingAmpl(self.pop,sfwf_ampl)
+        sfwf_ampl = (
+            forcingAmpl
+            * np.sqrt(dt_d.value_in(units.day) / year_length)
+            * self._noise
+        )
+        setStoichForcingAmpl(self.pop, sfwf_ampl)
 
         # Outer loop might not be necessary
         # since we rely on POP internal sub-stepping
@@ -122,7 +133,7 @@ class POPOmuseModel(ForwardModel):
         self._state = getLastRestart(self.pop)
 
         # Convert to year
-        return actual_dt.value_in(units.day)/year_length
+        return actual_dt.value_in(units.day) / year_length
 
     def getCurState(self):
         """Override the template."""
@@ -138,7 +149,7 @@ class POPOmuseModel(ForwardModel):
         # month following the month of interest
         date = self.pop.get_model_date()
         score_ref = monthly_reference(date)
-        score = (26.0 - self.pop.get_amoc_strength())/26.0
+        score = (26.0 - self.pop.get_amoc_strength()) / 26.0
         return score - score_ref
 
     def noise(self):
@@ -153,13 +164,13 @@ class POPOmuseModel(ForwardModel):
     def listProcess(self):
         """List process currently running."""
         for p in psu.process_iter():
-            if 'pop_worker' in p.name():
+            if "pop_worker" in p.name():
                 print(p, flush=True)
 
     def killSleepingProcess(self):
         """Kill pop process currently sleeping."""
         for p in psu.process_iter():
-            if 'pop_worker' in p.name() and 'sleep' in p.status():
+            if "pop_worker" in p.name() and "sleep" in p.status():
                 os.kill(p.pid(), signal.SIGKILL)
 
     def clear(self):
@@ -172,7 +183,7 @@ class POPOmuseModel(ForwardModel):
             del self.pop
             self.pop = None
         self._state = None
-        #print("Process after del()", flush=True)
-        #self.listProcess()
+        # print("Process after del()", flush=True)
+        # self.listProcess()
         time.sleep(2.0)
-        #self.killSleepingProcess()
+        # self.killSleepingProcess()

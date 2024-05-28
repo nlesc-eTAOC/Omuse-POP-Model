@@ -1,12 +1,9 @@
 import os
 import shutil
-import matplotlib
+
 import numpy as np
-from matplotlib import pyplot
 from omuse.community.pop.interface import POP
 from omuse.units import units
-
-matplotlib.use("agg")
 
 
 class POPUtilsError(Exception):
@@ -35,7 +32,7 @@ def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
 def getPOPinstance(
     pop_domain_dict: dict = None,
     pop_options: dict = None,
-    root_run_folder: str = None
+    root_run_folder: str = None,
 ) -> POP:
     """Return an instance of POP."""
     assert pop_domain_dict is not None
@@ -53,17 +50,19 @@ def getPOPinstance(
 
     # Copy the nml option file to the run folder
     orig_nml_file = pop_options.get("nml_file", "pop_in")
-    target_nml_file = "{}/{}".format(root_run_folder, os.path.basename(orig_nml_file))
+    target_nml_file = "{}/{}".format(
+        root_run_folder, os.path.basename(orig_nml_file)
+    )
     shutil.copy(orig_nml_file, target_nml_file)
 
     # Instantiate POP
     p = POP(
-        number_of_workers=pop_options.get("nProc",1),
+        number_of_workers=pop_options.get("nProc", 1),
         mode=mode,
         namelist_file=target_nml_file,
         redirection=redirect,
         redirect_file=redirect_file,
-        channel_type=pop_options.get("channel", "mpi")
+        channel_type=pop_options.get("channel", "mpi"),
     )
 
     # Grid option: either amuse or pop_files
@@ -91,11 +90,17 @@ def getPOPinstance(
     elif grid_option == "pop_files":
         # Standard pop file use fancy grid
         p.parameters.topography_option = "file"
-        p.parameters.topography_file = pop_domain_dict.get("topography_file", None)
+        p.parameters.topography_file = pop_domain_dict.get(
+            "topography_file", None
+        )
         p.parameters.vert_grid_option = "file"
-        p.parameters.vert_grid_file = pop_domain_dict.get("vert_grid_file", None)
+        p.parameters.vert_grid_file = pop_domain_dict.get(
+            "vert_grid_file", None
+        )
         p.parameters.horiz_grid_option = "file"
-        p.parameters.horiz_grid_file = pop_domain_dict.get("horiz_grid_file", None)
+        p.parameters.horiz_grid_file = pop_domain_dict.get(
+            "horiz_grid_file", None
+        )
     else:
         raise POPUtilsError(
             "Unknown grid_option {}. Either 'amuse' or 'pop_files'".format(
