@@ -20,6 +20,11 @@ from popomo.utils import (
     monthly_reference,
 )
 
+class PopomoError(Exception):
+    """Exception class for Popomo."""
+
+    pass
+
 
 class POPOmuseModel(ForwardModel):
     """A forward model for pyTAMS based on POP-Omuse."""
@@ -82,6 +87,8 @@ class POPOmuseModel(ForwardModel):
                 disableCheckPoint(self.pop)
             if self._state is not None:
                 setRestart(self.pop, self._state)
+                if not os.path.exists(self._state):
+                    raise PopomoError("State file {} do not exists".format(self._state))
             print("Start advancing with init. state {}".format(self._state))
 
         # Time stepping is month based, so exact length varies
