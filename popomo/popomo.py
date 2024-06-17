@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 import psutil as psu
+import netCDF4 as nc
 from omuse.units import units
 from pytams.fmodel import ForwardModel
 
@@ -48,6 +49,14 @@ class POPOmuseModel(ForwardModel):
         # keep track of initial time
         self._init_time = self._pop_params.get("init_time", 0.0)
 
+        # Forcing method
+        # Default is "baseline-frac" which only requires a single
+        # random number
+        self._forcing_method = self._pop_params.get("forcing_method", "baseline-frac")
+        # For ERA5 based forcing, need many more random
+        self._nr_eofs_ep = 0
+        self._nr_eofs_t2m = 0
+
         # POP domain parameters
         self._popDomain = self._pop_params.get("domain_dict", None)
         assert self._popDomain is not None
@@ -70,6 +79,7 @@ class POPOmuseModel(ForwardModel):
             self.checkpoint_prefix = "{}/trajectories/{}/{}".format(
                 nameDB, ioprefix, model
             )
+            self.era5data_file = "{}/ARSpinUpData.nc".format(self.run_folder)
             if not os.path.exists(self.run_folder):
                 os.mkdir(self.run_folder)
 
@@ -77,6 +87,7 @@ class POPOmuseModel(ForwardModel):
         """Override the template."""
         # On the first call to advance, initialize POP
         if self.pop is None:
+            self.spinup_AR_ERA5(self.era5data_file)
             self.pop = getPOPinstance(
                 pop_domain_dict=self._popDomain,
                 pop_options=self._pop_params,
@@ -152,9 +163,100 @@ class POPOmuseModel(ForwardModel):
         score = (26.0 - self.pop.get_amoc_strength()) / 26.0
         return score - score_ref
 
-    def noise(self):
+    def getNoise(self):
         """Return last generated noise."""
         return self._noise
+
+    def setNoise(self, a_noise):
+        """Set stochastic noise."""
+        self._noise = a_noise
+
+    def spinup_AR_ERA5(self, ARdatafile : str) -> None:
+        """Spinup data for AR model when using ERA5 forcing."""
+        if (self._forcing_method != "ERA-Data"):
+            return
+
+        # E-P data
+        lag_re_ep = np.load('./e_p_lags.npy')       # Lags
+        l_m_ep = int(np.amax(lag_re_ep))            # maximum lag
+        rho_ep = np.load('./e_p_yw_rho.npy')        # dim = nr_eofs x max lag
+        sig_ep = np.load('./e_p_yw_sigma.npy')      # dime = nr_eofs
+        nr_ep = sig_ep.shape[0]
+        hist_ep = np.zeros([nr_ep,l_m])           # spinup history
+
+        for nr_i in range(nr_ep): # Loop over all EOFs
+            # Select the lag corresponding to the partial autocorrelation function
+            lag = int(lag_re_ep[nr_i])
+            for spin_it in range(lag):
+                # Construct the AR(lag) process where the white noise
+                # is scaled with 'sig'
+                hist_ep[nr_i,l_m-1] =  np.dot(hist_ep[nr_i,:lag],rho_ep[nr_i,:lag])
+                                     + np.random.normal(0,sig_ep[nr_i])
+                
+                # Roll the time series to keep the history: 
+                # last item (just computed) becomes the first,
+                # first becomes second, etc.
+                hist_ep[nr_i,:] = np.roll(hist_ep[nr_i,:],1)
+
+        # t2m data
+        lag_re_t2m = np.load('./t2m_lags.npy')      # Lags
+        l_m_t2m = int(np.amax(lag_re_t2m))          # maximum lag
+        rho_t2m = np.load('./t2m_yw_rho.npy')       # dim = nr_eofs x max lag
+        sig_t2m = np.load('./t2m_yw_sigma.npy')     # dime = nr_eofs
+        nr_t2m = sig_t2m.shape[0]
+        hist_t2m = np.zeros([nr_t2m,l_m])           # spinup history
+
+        for nr_i in range(nr_t2m): # Loop over all EOFs
+            # Select the lag corresponding to the partial autocorrelation function
+            lag = int(lag_re_t2m[nr_i])
+            for spin_it in range(lag):
+                # Construct the AR(lag) process where the white noise
+                # is scaled with 'sig'
+                hist_t2m[nr_i,l_m-1] =  np.dot(hist_t2m[nr_i,:lag],rho_t2m[nr_i,:lag])
+                                     + np.random.normal(0,sig_t2m[nr_i])
+                
+                # Roll the time series to keep the history: 
+                # last item (just computed) becomes the first,
+                # first becomes second, etc.
+                hist_t2m[nr_i,:] = np.roll(hist_t2m[nr_i,:],1)
+
+        # Store AR data
+        nc_out = nc.Dataset(ARdatafile, 'w')
+        # dims
+        lag_out = nc_out.createDimension('lag_d_ep',l_m_ep)
+        eof_out = nc_out.createDimension('eof_d_ep',nr_eofs_ep)
+        lag_out = nc_out.createDimension('lag_d_t2m',l_m_t2m)
+        eof_out = nc_out.createDimension('eof_d_t2m',nr_eofs_t2m)
+        # lags (as int)
+        nc_lags = nc_out.createVariable('lags_ep', 'i4', 'eof_d_ep')
+        for i in range(nr_ep):
+            nc_lags[i] = int(lag_re_ep[i])
+        nc_lags = nc_out.createVariable('lags_t2m', 'i4', 'eof_d_t2m')
+        for i in range(nr_t2m):
+            nc_lags[i] = int(lag_re_t2m[i])
+        # rho
+        nc_rho = nc_out.createVariable('rho_ep', 'f8', ['eof_d_ep','lag_d_ep'])
+        nc_rho[:,:] = rho_ep[:,:]
+        nc_rho = nc_out.createVariable('rho_t2m', 'f8', ['eof_d_t2m','lag_d_t2m'])
+        nc_rho[:,:] = rho_t2m[:,:]
+        # sig
+        nc_sigs = nc_out.createVariable('sig_ep', 'f8', 'eof_d_ep')
+        nc_sigs[:] = sig_ep[:]
+        nc_sigs = nc_out.createVariable('sig_t2m', 'f8', 'eof_d_t2m')
+        nc_sigs[:] = sig_t2m[:]
+        # Next set of random number used in POP
+        nc_rnd = nc_out.createVariable('rnd_ep', 'f8', 'eof_d_ep')
+        nc_rnd[:] = np.random.randn(nr_ep)
+        nc_rnd = nc_data_out.createVariable('rnd_t2m', 'f8', 'eof_d_t2m')
+        nc_rnd[:] = np.random.randn(nr_t2m)
+        # Spinup history data
+        hist_out = nc_out.createVariable("hist_ep", 'f8', ["eof_d_ep","lag_d_ep"])
+        hist_out[:,:] = hist_ep[:,:]
+        hist_out = nc_out.createVariable("hist_t2m", 'f8', ["eof_d_t2m","lag_d_t2m"])
+        hist_out[:,:] = hist_t2m[:,:]
+        nc_out.close()
+
+
 
     @classmethod
     def name(self):
