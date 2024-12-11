@@ -10,11 +10,14 @@ def remainingdaysincurrentmonth(a_date: str) -> int:
     return remain
 
 
-def daysincurrentyear(a_date: str) -> int:
+def daysincurrentyear(a_date: str, allow_leap : bool = False) -> int:
     """Return the number of days in a given year."""
     year = int(a_date[0:4].lstrip("0"))
-    if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
-        return 366
+    if allow_leap:
+        if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+            return 366
+        else:
+            return 365
     else:
         return 365
 
