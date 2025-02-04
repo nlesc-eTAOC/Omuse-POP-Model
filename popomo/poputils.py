@@ -1,9 +1,11 @@
 import os
 import shutil
-
 import numpy as np
+import logging
 from omuse.community.pop.interface import POP
 from omuse.units import units
+
+_logger = logging.getLogger(__name__)
 
 
 class POPUtilsError(Exception):
@@ -29,12 +31,10 @@ def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
         return 1 - np.tanh(stretch_factor * (1 - z)) / np.tanh(stretch_factor)
 
 
-def getPOPinstance(
-    pop_domain_dict: dict = None,
-    pop_options: dict = None,
-    root_run_folder: str = None,
-) -> POP:
-    """Return an instance of POP."""
+def getPOPinstance(pop_domain_dict: dict = None,
+                   pop_options: dict = None,
+                   root_run_folder: str = None) -> POP:
+    """Return an instance of POP given a parameter dict."""
     assert pop_domain_dict is not None
 
     # Mode and worker name are based on resolution
@@ -54,6 +54,9 @@ def getPOPinstance(
         root_run_folder, os.path.basename(orig_nml_file)
     )
     shutil.copy(orig_nml_file, target_nml_file)
+
+    inf_msg = f"Initiating pop_{mode} with input nml {target_nml_file}"
+    _logger.info(inf_msg)
 
     # Instantiate POP
     p = POP(
@@ -102,19 +105,40 @@ def getPOPinstance(
             "horiz_grid_file", None
         )
     else:
-        raise POPUtilsError(
-            "Unknown grid_option {}. Either 'amuse' or 'pop_files'".format(
-                grid_option
-            )
-        )
+        err_msg = f"Unknown grid_option {grid_option}. Either 'amuse' or 'pop_files'"
+        raise POPUtilsError(err_msg)
+
+    # Set the POP average output prefix
+    p.parameters.tavg_file = root_run_folder + "/tavg"
+
+
+    # Set the diag and transport output prefix
+    p.parameters.diagout_file = root_run_folder + "/diag"
+    p.parameters.trandiagout_file = root_run_folder + "/tran"
 
     return p
 
 
-def setStoichForcingAmpl(p: POP, a_ampl: float):
-    """Set the FWF stoichastic amplitude."""
-    print("Stoich. amplitude is: {}".format(a_ampl))
-    p.parameters.stoich_ampl = a_ampl
+def setStochForcingAmpl(p: POP, a_ampl: float):
+    """Set the FWF stochastic amplitude."""
+    inf_msg = f"Stoch. amplitude is: {a_ampl}"
+    _logger.info(inf_msg)
+    p.parameters.stoch_ampl = a_ampl
+
+
+def setStochForcingFWF(p: POP, a_fwf):
+    """Set the FWF stochastic for ERA5-Data forcing."""
+    p.set_stoch_fwf_rnd(a_fwf)
+
+
+def setStochForcingARfile(p: POP, ARfile : str) -> None:
+    """Set the AR spinup data file path."""
+    p.set_stoch_fwf_ARfile(ARfile)
+
+
+def setStochERA5Forcingfile(p: POP, ERA5basefile : str) -> None:
+    """Set the ERA5 file base path."""
+    p.set_era5_forcing_file(ERA5basefile)
 
 
 def setCheckPoint(p: POP, freq: int, chkprefix: str):
@@ -122,7 +146,7 @@ def setCheckPoint(p: POP, freq: int, chkprefix: str):
     # Set restart such that a single restart is called at
     # the end of the advance function.
     p.parameters.restart_option = "nmonth"
-    p.parameters.restart_freq_option = 1
+    p.parameters.restart_freq_option = freq
     p.parameters.restart_file = chkprefix
 
 
