@@ -2,8 +2,11 @@ import xarray as xr
 import numpy as np
 import random
 import netCDF4 as nc
+import logging
 from pathlib import Path
 from scipy.stats import norminvgauss
+
+_logger = logging.getLogger(__name__)
 
 class ERA5ForcingGenerator:
     """A class encapsulating ERA-Data model forcing generation.
@@ -79,7 +82,8 @@ class ERA5ForcingGenerator:
 
         # One file per year, keep track of this
         if year == self._gen_year:
-            print("No need for new forcing data files !", flush = True)
+            dbg_msg = f"No need for new forcing data files for year {year} !"
+            _logger.debug(dbg_msg)
             return
 
         # Update _gen_year
