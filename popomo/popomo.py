@@ -10,15 +10,15 @@ from omuse.units import units
 from pytams.fmodel import ForwardModelBaseClass
 
 from popomo.poputils import (
-    disableCheckPoint,
-    getLastRestart,
     getPOPinstance,
     setCheckPoint,
+    disableCheckPoint,
+    getLastRestart,
     setRestart,
     setStochForcingAmpl,
-    setStochForcingFWF,
-    setStochForcingARfile,
-    setStochERA5Forcingfile,
+    setERA5PCARForcing,
+    setERA5PCARSpinUpfile,
+    setERA5NIGForcingfile,
 )
 from popomo.utils import (
     daysincurrentyear,
@@ -27,7 +27,8 @@ from popomo.utils import (
     year_month_day,
 )
 from popomo.forcing_ERA5 import (
-    ERA5ForcingGenerator
+    ERA5NIGForcingGenerator,
+    ERA5PCARForcingGenerator,
 )
 from popomo.plotutils import (
     plot_globe,
@@ -44,13 +45,41 @@ class PopomoError(Exception):
 
 
 class POPOmuseModel(ForwardModelBaseClass):
-    """A forward model for pyTAMS based on POP-Omuse."""
+    """A forward model for pyTAMS based on POP-Omuse.
 
+    This class implements a forward model compatible with pyTAMS
+    for the Parallel Ocean Program (POP), a Fortran90 GCM ocean
+    model, through the OMUSE framework.
+
+    POP is driven in lock-step with an outer stochastic loop
+    with a fixed step length of a month (calendar month), such
+    that POP monthly average fields are used to build a TAMS score
+    function.
+
+    Stochastic forcing can take various form, but the specific
+    version of POP supporting the OMUSE interface and addons
+    for TAMS forcing is open-source and available here:
+    https://github.com/nlesc-smcm/eSalsa-POP
+
+    In this model:
+    - the state is a path to a POP restart file
+    - the score is a float in R
+    - the noise type depends on the forcing type selected:
+        - baseline-frac: float
+        - ERA5-NIG: a path to NetCDF file, appended with _MM
+        - ERA5-PC-NIG: numpy array for E-P and T@2m EOFs
+        - ERA5-PC-AR: numpy array for E-P and T@2m EOFs as AR coefficients
+    """
     def _init_model(self,
                     params: dict,
                     ioprefix: str = None) -> None:
-        """Override the template."""
-        # Setup the RNG
+        """Override the template.
+
+        Args:
+            params : a parameters dictionary
+            ioprefix : the name of the trajectory using this model instance
+        """
+        # Setup the random number generator, with seed if deterministic run
         if params["model"]["deterministic"]:
             seed = int(ioprefix[4:])
             self._rng = np.random.default_rng(seed)
@@ -59,6 +88,31 @@ class POPOmuseModel(ForwardModelBaseClass):
 
         # Stash away POP-specific parameters
         self._pop_params = params.get("pop", {})
+
+        # Get POP domain parameters
+        self._popDomain = self._pop_params.get("domain_dict", None)
+        assert self._popDomain is not None
+
+        # We always need the database when running this model
+        save_db = params.get("database", {}).get("DB_save", False)
+        if not save_db:
+            err_msg = "POPOmuseModel for TAMS always needs the database"
+            _logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # Setup the run folder in the DB
+        nameDB = "{}.tdb".format(
+            params.get("database", {}).get("DB_prefix", "TAMS")
+        )
+        model = "pop_{}x{}x{}".format(
+            self._popDomain.get("Nx", 120),
+            self._popDomain.get("Ny", 56),
+            self._popDomain.get("Nz", 12),
+        )
+        self.run_folder = f"{nameDB}/trajectories/{ioprefix}"
+        self.checkpoint_prefix = f"{nameDB}/trajectories/{ioprefix}/{model}"
+        if not os.path.exists(self.run_folder):
+            os.mkdir(self.run_folder)
 
         # In this model, the state is a pointer to a POP restart file
         # Upon initialization, pass a initial solution if one is provided
@@ -69,55 +123,51 @@ class POPOmuseModel(ForwardModelBaseClass):
             self._state = init_file
 
         # Forcing method
-        # Default is "baseline-frac" which only requires a single
-        # random number
+        # Default is "baseline-frac" which only requires a single random number
         self._forcing_method = self._pop_params.get("forcing_method", "baseline-frac")
-        if self._forcing_method == "ERA5-dataAR":
-            # For ERA5 AR based forcing, need many more random
+        if self._forcing_method == "ERA5-PC-AR":
+            # For ERA5 PC-AR based forcing: needs as many random numbers as
+            # the number of EOFs. Pass in the model RNG and spinup file.
+            era5_data_folder = self._pop_params.get("ERA5-dataloc", None)
+            self._era5_gen = ERA5PCARForcingGenerator(era5_data_folder)
+            self._era5_gen.set_rng(self._rng)
+            era5_spinup_file = f"{self.run_folder}/ARSpinUpData.nc"
+            self._era5_gen.set_spinup_file(era5_spinup_file)
+        elif self._forcing_method == "ERA5-PC-NIG":
+            # For ERA5 PC-NIG based forcing: needs as many random numbers as
+            # the number of EOFs
             self._nr_eofs_ep = 0
             self._nr_eofs_t2m = 0
-        elif self._forcing_method == "ERA5-data":
-            # For ERA5 data, use the generator
+        elif self._forcing_method == "ERA5-NIG":
+            # For ERA5 NIG based, use the generator
             self._era5_prefix = self._pop_params.get("ERA5-basefile", "ERA5_Noise")
-            self._era5_data_folder = self._pop_params.get("ERA5-dataloc", None)
+            era5_data_folder = self._pop_params.get("ERA5-dataloc", None)
             self._era5_init_year = self._pop_params.get("ERA5-inityear", None)
-            self._era5_gen = ERA5ForcingGenerator(self._era5_data_folder)
-
-        # POP domain parameters
-        self._popDomain = self._pop_params.get("domain_dict", None)
-        assert self._popDomain is not None
+            self._era5_gen = ERA5NIGForcingGenerator(era5_data_folder)
 
         # The actual POP object
+        # It is initialized only when calling advance for the first time
         self.pop = None
 
-        # Database information
-        self.run_folder = "./"
-        self.checkpoint_prefix = None
-        if params.get("database", {}).get("DB_save", False):
-            nameDB = "{}.tdb".format(
-                params.get("database", {}).get("DB_prefix", "TAMS")
-            )
-            model = "pop_{}x{}x{}".format(
-                self._popDomain.get("Nx", 120),
-                self._popDomain.get("Ny", 56),
-                self._popDomain.get("Nz", 12),
-            )
-            self.run_folder = f"{nameDB}/trajectories/{ioprefix}"
-            self.checkpoint_prefix = "{}/trajectories/{}/{}".format(
-                nameDB, ioprefix, model
-            )
-            if self._forcing_method == "ERA5-dataAR":
-                self.era5data_file = f"{self.run_folder}/ARSpinUpData.nc"
-            if not os.path.exists(self.run_folder):
-                os.mkdir(self.run_folder)
 
     def _advance(self,
                  step: int,
                  time : float,
                  dt: float,
                  noise: Any,
-                 forcingAmpl: float):
-        """Override the template."""
+                 forcingAmpl: float) -> float:
+        """Advance the model for one stochastic step.
+
+        Args:
+            step : current trajectory time step
+            time : starting time
+            dt : stochastic step size in year
+            noise : the noise for the current step
+            forcingAmpl : a noise amplitude factor
+
+        Returns:
+            The actual step size advanced by the model
+        """
         # On the first call to advance, initialize POP
         if self.pop is None:
             _logger.debug("Start POP itself")
@@ -129,15 +179,20 @@ class POPOmuseModel(ForwardModelBaseClass):
             )
             _logger.debug("Done starting POP itself")
 
-            # ERA5-dataAR forcing model need some spin-up
-            if self._forcing_method == "ERA5-dataAR":
-                self.spinup_AR_ERA5(self.era5data_file)
-            # ERA5-data uses a forcing file
-            # Formatted with {prefix}_{year} containing all 12 months.
-            # only generate a new file if step == 0
-            # otherwise rely on restart mechanism internals to ensure a forcing
-            # data file exists
-            elif self._forcing_method == "ERA5-data":
+            # Handle noise generator initialization
+            if self._forcing_method == "ERA5-PC-AR":
+                # ERA5-PC-AR forcing model needs some spin-up
+                self._era5_gen.spinup_AR()
+                setERA5PCARSpinUpfile(self.pop, self._era5_gen.get_spinup_file())
+            elif self._forcing_method == "ERA5-PC-NIG":
+                # ERA5-PC-NIG
+                print("TODO")
+            elif self._forcing_method == "ERA5-NIG":
+                # ERA5-NIG uses a forcing file
+                # Formatted with {prefix}_{year} containing all 12 months.
+                # only generate a new file if step == 0
+                # otherwise rely on restart mechanism internals to ensure a forcing
+                # data file exists
                 if self._step == 0:
                     # Generate a forcing file for the starting year
                     # Can't use POP to get the year yet, so use input param
@@ -147,53 +202,53 @@ class POPOmuseModel(ForwardModelBaseClass):
                     dbg_msg = f"Generating noise file {forcing_file_base}"
                     _logger.debug(dbg_msg)
                 forcing_file_base = f"{self.run_folder}/{self._era5_prefix}"
-                setStochERA5Forcingfile(self.pop, forcing_file_base)
+                setERA5NIGForcingfile(self.pop, forcing_file_base)
 
+            # Control POP checkpointing
             if self.checkpoint_prefix:
                 setCheckPoint(self.pop, 12, self.checkpoint_prefix)
             else:
                 disableCheckPoint(self.pop)
+
+            # Set initial restart file (i.e. initial state)
             if self._state is not None:
                 setRestart(self.pop, self._state)
-                if not os.path.exists(self._state):
-                    err_msg = f"State file {self._state} do not exists"
-                    _logger.error(err_msg)
-                    raise PopomoError(err_msg)
+
             dbg_msg = f"Start advancing with init. state {self._state}"
             _logger.debug(dbg_msg)
 
-        # Time stepping is month based, so exact length varies
-        tstart = self.pop.model_time
+        # Time stepping is in year, with a month long step
+        # so exact length varies. Get the current step length in days.
         date = self.pop.get_model_date()
-        days_left = remainingdaysincurrentmonth(date)
-        year_length = daysincurrentyear(date, False)
-        tnow = tstart
-        dt_d = days_left * 1 | units.day
-        tstoch_end = tstart + dt_d
+        days_left_in_month = remainingdaysincurrentmonth(date)
+        dt_d =  days_left_in_month * 1 | units.day
 
-        tstart_d = tstart.value_in(units.day)
-        tend_d = tstoch_end.value_in(units.day)
-        inf_msg = f"Start stoch step: tstart = {tstart_d}, t_end = {tend_d}"
-        _logger.info(inf_msg)
-
-        # Set stochastic amplitude
+        # Handle incoming noise depending on the selected type
+        stochf_ampl = 0.0
         if (self._forcing_method == "baseline-frac"):
-            # Amplitude is a random number, scaled by user-provided forcingAmpl
-            sfwf_ampl = (
+            # Amplitude is drawn in a normal distribution
+            # scaled by dt (gaussian white noise) and scaled by forcingAmpl
+            year_length = daysincurrentyear(date, False)
+            stochf_ampl = (
                 forcingAmpl
                 * np.sqrt(dt_d.value_in(units.day) / year_length)
                 * noise
             )
-            setStochForcingAmpl(self.pop, sfwf_ampl)
-        elif (self._forcing_method == "ERA5-data"):
+        elif (self._forcing_method == "ERA5-PC-AR"):
+            # Random numbers for noise generated are passed to POP
+            setERA5PCARForcing(self.pop, noise)
+            stochf_ampl = forcingAmpl
+        elif (self._forcing_method == "ERA5-PC-NIG"):
             # Amplitude is set to user-provided forcingAmpl
             # Local data read from file provided in pop_in
-            setStochForcingAmpl(self.pop, forcingAmpl)
-        elif (self._forcing_method == "ERA5-dataAR"):
-            # Random number for noise generated and passed here
-            # user-provided forcingAmpl is used for amplitude scaling
-            setStochForcingFWF(self.pop, noise)
-            setStochForcingAmpl(self.pop, forcingAmpl)
+            stochf_ampl = forcingAmpl
+        elif (self._forcing_method == "ERA5-NIG"):
+            # Incoming noise is actually handled internally by POP
+            # Nothing to do here but set the scaling
+            stochf_ampl = forcingAmpl
+
+        # All models use a scaling
+        setStochForcingAmpl(self.pop, stochf_ampl)
 
         #sfwf_flux = self.pop.elements.surface_fresh_water_flux.value_in(units.kg / units.m**2 / units.s)
         #plot_globe_old(self.pop, sfwf_flux, "kg/m2/s", "sfwf_flux", elements=True)
@@ -203,21 +258,25 @@ class POPOmuseModel(ForwardModelBaseClass):
         #plot_globe_old(self.pop, sfwf_precip, "kg/m2/s", "sfwf_precip", elements=True)
         #exit()
 
-        # Outer loop might not be necessary
-        # since we rely on POP internal sub-stepping
-        # but keep it for now
-        while tnow < tstoch_end:
-            tend = tnow + dt_d
-            self.pop.evolve_model(tend)
-            tnow = self.pop.model_time
+        # Get start and end date
+        tstart = self.pop.model_time
+        tend = tstart + dt_d
+        inf_msg = f"Start stoch step: tstart = {tstart.value_in(units.day)},"\
+                  f" t_end = {tend.value_in(units.day)}"
+        _logger.info(inf_msg)
+
+        # Advance POP to the end of the stochastic step
+        self.pop.evolve_model(tend)
 
         # Retrieve the actual time for which POP was integrated
+        tnow = self.pop.model_time
         actual_dt = tnow - tstart
 
         # State is handled by a pointer to a check file
         self._state = getLastRestart(self.pop)
 
-        # Convert to year
+        # TAMS runs in unit year -> convert actual_dt to year
+        year_length = daysincurrentyear(date, False)
         return actual_dt.value_in(units.day) / year_length
 
     def getCurState(self):
@@ -246,7 +305,12 @@ class POPOmuseModel(ForwardModelBaseClass):
         if (self._forcing_method == "baseline-frac"):
             # Single number for scaling of baseline forcing data
             return self._rng.standard_normal(1)
-        elif (self._forcing_method == "ERA5-data"):
+        elif (self._forcing_method == "ERA5-PC-AR"):
+            # A set of random numbers, one for each EOF of both E-P and T
+            return self._era5_gen.generate_normal_noise()
+        elif (self._forcing_method == "ERA5-PC-NIG"):
+            return 0.0
+        elif (self._forcing_method == "ERA5-NIG"):
             # Return a file name and month index
             if self.pop:
                 date = self.pop.get_model_date()
@@ -258,100 +322,9 @@ class POPOmuseModel(ForwardModelBaseClass):
                 return f"{forcing_file_base}_{month}"
             else:
                 return f"None"
-        elif (self._forcing_method == "ERA5-dataAR"):
-            # A set of random numbers for each EOF of both E-P and T 
-            return self._rng.standard_normal(self._nr_eofs_ep)
-
-    def spinup_AR_ERA5(self, ARdatafile : str) -> None:
-        """Spinup data for AR model when using ERA5 forcing."""
-        if (self._forcing_method != "ERA5-dataAR"):
-            return
-
-        # E-P data
-        lag_re_ep = np.load('./e_p_lags.npy')       # Lags
-        l_m_ep = int(np.amax(lag_re_ep))            # maximum lag
-        rho_ep = np.load('./e_p_yw_rho.npy')        # dim = nr_eofs x max lag
-        sig_ep = np.load('./e_p_yw_sigma.npy')      # dime = nr_eofs
-        nr_ep = sig_ep.shape[0]
-        hist_ep = np.zeros([nr_ep,l_m_ep])          # spinup history
-        self._nr_eofs_ep = nr_ep
-
-        for nr_i in range(nr_ep): # Loop over all EOFs
-            # Select the lag corresponding to the partial autocorrelation function
-            lag = int(lag_re_ep[nr_i])
-            for spin_it in range(lag):
-                # Construct the AR(lag) process where the white noise
-                # is scaled with 'sig'
-                hist_ep[nr_i,l_m_ep-1] = (np.dot(hist_ep[nr_i,:lag],rho_ep[nr_i,:lag])
-                                        + np.random.normal(0,sig_ep[nr_i]))
-                
-                # Roll the time series to keep the history: 
-                # last item (just computed) becomes the first,
-                # first becomes second, etc.
-                hist_ep[nr_i,:] = np.roll(hist_ep[nr_i,:],1)
-
-        # t2m data
-        lag_re_t2m = np.load('./t2m_lags.npy')      # Lags
-        l_m_t2m = int(np.amax(lag_re_t2m))          # maximum lag
-        rho_t2m = np.load('./t2m_yw_rho.npy')       # dim = nr_eofs x max lag
-        sig_t2m = np.load('./t2m_yw_sigma.npy')     # dime = nr_eofs
-        nr_t2m = sig_t2m.shape[0]
-        hist_t2m = np.zeros([nr_t2m,l_m_t2m])       # spinup history
-        self._nr_eofs_t2m = nr_t2m
-
-        for nr_i in range(nr_t2m): # Loop over all EOFs
-            # Select the lag corresponding to the partial autocorrelation function
-            lag = int(lag_re_t2m[nr_i])
-            for spin_it in range(lag):
-                # Construct the AR(lag) process where the white noise
-                # is scaled with 'sig'
-                hist_t2m[nr_i,l_m_t2m-1] = (np.dot(hist_t2m[nr_i,:lag],rho_t2m[nr_i,:lag])
-                                          + np.random.normal(0,sig_t2m[nr_i]))
-                
-                # Roll the time series to keep the history: 
-                # last item (just computed) becomes the first,
-                # first becomes second, etc.
-                hist_t2m[nr_i,:] = np.roll(hist_t2m[nr_i,:],1)
-
-        # Store AR data
-        nc_out = nc.Dataset(ARdatafile, 'w')
-        # dims
-        lag_out = nc_out.createDimension('lag_d_ep',l_m_ep)
-        eof_out = nc_out.createDimension('eof_d_ep',nr_ep)
-        lag_out = nc_out.createDimension('lag_d_t2m',l_m_t2m)
-        eof_out = nc_out.createDimension('eof_d_t2m',nr_t2m)
-        # lags (as int)
-        nc_lags = nc_out.createVariable('lags_ep', 'i4', 'eof_d_ep')
-        for i in range(nr_ep):
-            nc_lags[i] = int(lag_re_ep[i])
-        nc_lags = nc_out.createVariable('lags_t2m', 'i4', 'eof_d_t2m')
-        for i in range(nr_t2m):
-            nc_lags[i] = int(lag_re_t2m[i])
-        # rho
-        nc_rho = nc_out.createVariable('rho_ep', 'f8', ['eof_d_ep','lag_d_ep'])
-        nc_rho[:,:] = rho_ep[:,:]
-        nc_rho = nc_out.createVariable('rho_t2m', 'f8', ['eof_d_t2m','lag_d_t2m'])
-        nc_rho[:,:] = rho_t2m[:,:]
-        # sig
-        nc_sigs = nc_out.createVariable('sig_ep', 'f8', 'eof_d_ep')
-        nc_sigs[:] = sig_ep[:]
-        nc_sigs = nc_out.createVariable('sig_t2m', 'f8', 'eof_d_t2m')
-        nc_sigs[:] = sig_t2m[:]
-        # Next set of random number used in POP
-        nc_rnd = nc_out.createVariable('rnd_ep', 'f8', 'eof_d_ep')
-        nc_rnd[:] = np.random.randn(nr_ep)
-        nc_rnd = nc_out.createVariable('rnd_t2m', 'f8', 'eof_d_t2m')
-        nc_rnd[:] = np.random.randn(nr_t2m)
-        # Spinup history data
-        hist_out = nc_out.createVariable("hist_ep", 'f8', ["eof_d_ep","lag_d_ep"])
-        hist_out[:,:] = hist_ep[:,:]
-        hist_out = nc_out.createVariable("hist_t2m", 'f8', ["eof_d_t2m","lag_d_t2m"])
-        hist_out[:,:] = hist_t2m[:,:]
-        nc_out.close()
-
 
     @classmethod
-    def name(self):
+    def name(self) -> str:
         """Return the model name."""
         return "POPOmuseModel"
 
@@ -367,7 +340,7 @@ class POPOmuseModel(ForwardModelBaseClass):
             if "pop_worker" in p.name() and "sleep" in p.status():
                 os.kill(p.pid(), signal.SIGKILL)
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear any model internals."""
         _logger.debug("Clearing model internals")
         time.sleep(2.0)

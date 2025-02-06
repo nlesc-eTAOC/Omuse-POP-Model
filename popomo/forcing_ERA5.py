@@ -1,20 +1,193 @@
-import xarray as xr  
+import xarray as xr
 import numpy as np
 import random
 import netCDF4 as nc
 import logging
+import numpy.typing as npt
 from pathlib import Path
 from scipy.stats import norminvgauss
 
 _logger = logging.getLogger(__name__)
 
-class ERA5ForcingGenerator:
-    """A class encapsulating ERA-Data model forcing generation.
+class ERA5PCARForcingGenerator:
+    """A class encapsulating ERA5-PC-AR model forcing generation.
 
     This class gather functionalities to generate forcing noise
     on E-P and T@2m using A. Boot analysis published in:
     https://esd.copernicus.org/articles/16/115/2025/
-    In particular, the NIG model is available.
+    In particular, the PC autoregressive (AR) model only available in an early
+    version of the paper.
+
+    Attributes:
+        _data_path : the path towards PC-AR data and grid data
+        _nr_eofs : total number of EOFs in E-P and T@2m
+    """
+    def __init__(self,
+                 data_path : str) -> None:
+        """Initialize the generator."""
+        self._nr_eofs = -1
+        self._data_path : str = data_path
+        self._rng = None
+        self._spinup_file = None
+        if not Path(data_path).is_dir():
+            err_msg = f"Wrong ERA5-PC-AR forcing model data path {data_path}"
+            _logger.error(err_msg)
+            raise ValueError(err_msg)
+
+    def set_rng(self,
+                randomgen) -> None:
+        """Set the random number generator.
+
+        Args:
+            An initialized random number generator
+        """
+        self._rng = randomgen
+
+    def set_nr_eofs(self,
+                    neofs : int) -> None:
+        """Set the internal number of EOFs.
+
+        Args:
+            neofs : number of EOFs
+        """
+        self._nr_eofs = neofs
+
+
+    def set_spinup_file(self,
+                        ERA5PCARSpinUpfile : str) -> None:
+        """Set the spinup AR file.
+
+        Args:
+            ERA5PCARSpinUpfile : the path for the NetCDF output spinup file
+        """
+        self._spinup_file = ERA5PCARSpinUpfile
+
+
+    def get_spinup_file(self) -> str:
+        """Get the spinup AR file.
+
+        Returns:
+            the path for the NetCDF output spinup file
+        """
+        if self._spinup_file is None:
+            err_msg = "Unable to retrieve AR spinup file: not specified"
+            _logger.error(err_msg)
+            raise RuntimeError(err_msg)
+        return self._spinup_file
+
+
+    def spinup_AR(self) -> None:
+        """Spinup data for AR model.
+
+        The autoregressive model requires history data. This function
+        generates a history and stores it in a NetCDF file.
+        """
+        if self._spinup_file is None:
+            err_msg = "Unable to generate AR spinup: output file not specified"
+            _logger.error(err_msg)
+            raise RuntimeError(err_msg)
+
+        # E-P data
+        lag_re_ep = np.load(f"{self._data_path}/e_p_lags.npy")    # Lags
+        rho_ep = np.load(f"{self._data_path}/e_p_yw_rho.npy")     # dim = nr_eofs x max lag
+        sig_ep = np.load(f"{self._data_path}/e_p_yw_sigma.npy")   # dime = nr_eofs
+        nr_ep = sig_ep.shape[0]
+        l_m_ep = int(np.amax(lag_re_ep))                    # maximum lag
+        hist_ep = np.zeros([nr_ep,l_m_ep])                  # spinup history
+
+        # T2m data
+        lag_re_t2m = np.load(f"{self._data_path}/t2m_lags.npy")    # Lags
+        rho_t2m = np.load(f"{self._data_path}/t2m_yw_rho.npy")     # dim = nr_eofs x max lag
+        sig_t2m = np.load(f"{self._data_path}/t2m_yw_sigma.npy")   # dime = nr_eofs
+        nr_t2m = sig_t2m.shape[0]
+        l_m_t2m = int(np.amax(lag_re_t2m))                    # maximum lag
+        hist_t2m = np.zeros([nr_t2m,l_m_t2m])                 # spinup history
+
+        # Total number of random number needed in the future
+        self._nr_eofs = nr_ep + nr_t2m
+
+        for nr_i in range(nr_ep): # Loop over all EOFs
+            # Select the lag corresponding to the partial autocorrelation function
+            lag = int(lag_re_ep[nr_i])
+            for spin_it in range(lag):
+                # Construct the AR(lag) process where the white noise
+                # is scaled with 'sig'
+                hist_ep[nr_i,l_m_ep-1] = (np.dot(hist_ep[nr_i,:lag],rho_ep[nr_i,:lag])
+                                        + np.random.normal(0,sig_ep[nr_i]))
+
+                # Roll the time series to keep the history:
+                # last item (just computed) becomes the first,
+                # first becomes second, etc.
+                hist_ep[nr_i,:] = np.roll(hist_ep[nr_i,:],1)
+
+        for nr_i in range(nr_t2m): # Loop over all EOFs
+            # Select the lag corresponding to the partial autocorrelation function
+            lag = int(lag_re_t2m[nr_i])
+            for spin_it in range(lag):
+                # Construct the AR(lag) process where the white noise
+                # is scaled with 'sig'
+                hist_t2m[nr_i,l_m_t2m-1] = (np.dot(hist_t2m[nr_i,:lag],rho_t2m[nr_i,:lag])
+                                          + np.random.normal(0,sig_t2m[nr_i]))
+
+                # Roll the time series to keep the history:
+                # last item (just computed) becomes the first,
+                # first becomes second, etc.
+                hist_t2m[nr_i,:] = np.roll(hist_t2m[nr_i,:],1)
+
+        # Store AR spinup data
+        nc_out = nc.Dataset(self._spinup_file, 'w')
+        # dims
+        lag_out = nc_out.createDimension('lag_d_ep',l_m_ep)
+        eof_out = nc_out.createDimension('eof_d_ep',nr_ep)
+        lag_out = nc_out.createDimension('lag_d_t2m',l_m_t2m)
+        eof_out = nc_out.createDimension('eof_d_t2m',nr_t2m)
+        # lags (as int)
+        nc_lags = nc_out.createVariable('lags_ep', 'i4', 'eof_d_ep')
+        for i in range(nr_ep):
+            nc_lags[i] = int(lag_re_ep[i])
+        nc_lags = nc_out.createVariable('lags_t2m', 'i4', 'eof_d_t2m')
+        for i in range(nr_t2m):
+            nc_lags[i] = int(lag_re_t2m[i])
+        # rho
+        nc_rho = nc_out.createVariable('rho_ep', 'f8', ['eof_d_ep','lag_d_ep'])
+        nc_rho[:,:] = rho_ep[:,:]
+        nc_rho = nc_out.createVariable('rho_t2m', 'f8', ['eof_d_t2m','lag_d_t2m'])
+        nc_rho[:,:] = rho_t2m[:,:]
+        # sig
+        nc_sigs = nc_out.createVariable('sig_ep', 'f8', 'eof_d_ep')
+        nc_sigs[:] = sig_ep[:]
+        nc_sigs = nc_out.createVariable('sig_t2m', 'f8', 'eof_d_t2m')
+        nc_sigs[:] = sig_t2m[:]
+        # Next set of random number used in POP
+        nc_rnd = nc_out.createVariable('rnd_ep', 'f8', 'eof_d_ep')
+        nc_rnd[:] = np.random.randn(nr_ep)
+        nc_rnd = nc_out.createVariable('rnd_t2m', 'f8', 'eof_d_t2m')
+        nc_rnd[:] = np.random.randn(nr_t2m)
+        # Spinup history data
+        hist_out = nc_out.createVariable("hist_ep", 'f8', ["eof_d_ep","lag_d_ep"])
+        hist_out[:,:] = hist_ep[:,:]
+        hist_out = nc_out.createVariable("hist_t2m", 'f8', ["eof_d_t2m","lag_d_t2m"])
+        hist_out[:,:] = hist_t2m[:,:]
+        nc_out.close()
+
+    def generate_normal_noise(self) -> npt.NDArray[np.float64]:
+        """Generate a vector of normally distrib. value.
+
+        Returns:
+            A numpy array of floats.
+        """
+        if self._rng is None:
+            self._rng = np.random.default_rng()
+        return  self._rng.standard_normal(self._nr_eofs)
+
+
+class ERA5NIGForcingGenerator:
+    """A class encapsulating ERA5-NIG model forcing generation.
+
+    This class gather functionalities to generate forcing noise
+    on E-P and T@2m using A. Boot analysis published in:
+    https://esd.copernicus.org/articles/16/115/2025/
+    In particular, the NIG model.
 
     Attributes:
         _data_path : the path towards NIG fit and grid data
@@ -44,7 +217,7 @@ class ERA5ForcingGenerator:
         self.era_mask = np.load(f"{self._data_path}/mask_era.npy")
 
         # NIG model fit from
-        # https://doi.org/10.5194/egusphere-2024-2431, 2024. 
+        # https://doi.org/10.5194/egusphere-2024-2431, 2024.
         self.era_params_ep_tot = np.load(f'{self._data_path}/params_era_ep_NIG.npy') # Load in parameters
         self.era_params_t2m_tot = np.load(f'{self._data_path}/params_era_t2m_NIG.npy') # Load in parameters
         assert(self.era_params_ep_tot.shape[1] == self.era_lat_len)
@@ -90,14 +263,14 @@ class ERA5ForcingGenerator:
         self._gen_year = year
 
         noise_ep = np.zeros([self._month_l, self.era_lat_len,
-                             self.era_lon_len]) 
+                             self.era_lon_len])
         noise_t2m = np.zeros([self._month_l, self.era_lat_len,
-                              self.era_lon_len]) 
+                              self.era_lon_len])
 
         # First use NIG on ERA5 grid
         for lat_i in range(self.era_lat_len):
             for lon_i in range(self.era_lon_len):
-                # Set noise to Nan (??) on land ERA5 mask 
+                # Set noise to Nan (??) on land ERA5 mask
                 if self.era_mask[lat_i,lon_i] < 1.0:
                     noise_ep[:,lat_i,lon_i] = np.nan*np.ones((self._month_l))
                     noise_t2m[:,lat_i,lon_i] = np.nan*np.ones((self._month_l))
@@ -106,7 +279,7 @@ class ERA5ForcingGenerator:
                     params_t2m = self.era_params_t2m_tot[:,lat_i,lon_i]
                     A_ep = norminvgauss.rvs(*params_ep,size = self._month_l)
                     A_t2m = norminvgauss.rvs(*params_t2m,size = self._month_l)
-                    noise_ep[:,lat_i,lon_i] = A_ep   
+                    noise_ep[:,lat_i,lon_i] = A_ep
                     noise_t2m[:,lat_i,lon_i] = A_t2m
 
         # Interpolate on POP grid and write NC file
