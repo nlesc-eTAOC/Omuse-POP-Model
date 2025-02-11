@@ -132,26 +132,39 @@ def setStochForcingAmpl(p: POP,
     p.parameters.stoch_ampl = a_ampl
 
 
-def setERA5PCARForcing(p: POP,
-                       noiseAR) -> None:
-    """Set the stochastic noise for ERA5-PC-AR forcing.
+def setERA5PCForcing(p: POP,
+                     noise) -> None:
+    """Set the stochastic noise for ERA5-PC-* forcing.
 
     Args:
         p : a POP instance
-        noiseAR : an array of random numbers
+        noise : an array of random numbers
     """
-    p.set_era5pcar_noise(noiseAR)
+    inf_msg = f"Setting ERA5PC random {len(noise)} numbers"
+    _logger.info(inf_msg)
+    p.set_era5pc_noise(noise)
 
 
 def setERA5PCARSpinUpfile(p: POP,
-                          ERA5NIGARSpinUpfile : str) -> None:
+                          ERA5PCARSpinUpfile : str) -> None:
     """Set the AR spinup data file path.
+
+    Args:
+        p : a POP instance
+        ERA5PCARSpinUpfile : the spinup AR coefficients file
+    """
+    p.set_era5pcar_spinupfile(ERA5PCARSpinUpfile)
+
+
+def setERA5PCNIGInitfile(p: POP,
+                         ERA5PCNIGinitfile : str) -> None:
+    """Set the PC-NIG initial noise data file path.
 
     Args:
         p : a POP instance
         ERA5NIGARSpinUpfile : the spinup AR coefficients file
     """
-    p.set_era5pcar_spinupfile(ERA5NIGARSpinUpfile)
+    p.set_era5pcnig_initfile(ERA5PCNIGinitfile)
 
 
 def setERA5NIGForcingfile(p: POP,

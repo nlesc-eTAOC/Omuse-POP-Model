@@ -16,8 +16,9 @@ from popomo.poputils import (
     getLastRestart,
     setRestart,
     setStochForcingAmpl,
-    setERA5PCARForcing,
+    setERA5PCForcing,
     setERA5PCARSpinUpfile,
+    setERA5PCNIGInitfile,
     setERA5NIGForcingfile,
 )
 from popomo.utils import (
@@ -28,7 +29,7 @@ from popomo.utils import (
 )
 from popomo.forcing_ERA5 import (
     ERA5NIGForcingGenerator,
-    ERA5PCARForcingGenerator,
+    ERA5PCForcingGenerator,
 )
 from popomo.plotutils import (
     plot_globe,
@@ -129,15 +130,15 @@ class POPOmuseModel(ForwardModelBaseClass):
             # For ERA5 PC-AR based forcing: needs as many random numbers as
             # the number of EOFs. Pass in the model RNG and spinup file.
             era5_data_folder = self._pop_params.get("ERA5-dataloc", None)
-            self._era5_gen = ERA5PCARForcingGenerator(era5_data_folder)
+            self._era5_gen = ERA5PCForcingGenerator(era5_data_folder, "PC-AR")
             self._era5_gen.set_rng(self._rng)
             era5_spinup_file = f"{self.run_folder}/ARSpinUpData.nc"
             self._era5_gen.set_spinup_file(era5_spinup_file)
         elif self._forcing_method == "ERA5-PC-NIG":
             # For ERA5 PC-NIG based forcing: needs as many random numbers as
             # the number of EOFs
-            self._nr_eofs_ep = 0
-            self._nr_eofs_t2m = 0
+            era5_data_folder = self._pop_params.get("ERA5-dataloc", None)
+            self._era5_gen = ERA5PCForcingGenerator(era5_data_folder, "PC-NIG")
         elif self._forcing_method == "ERA5-NIG":
             # For ERA5 NIG based, use the generator
             self._era5_prefix = self._pop_params.get("ERA5-basefile", "ERA5_Noise")
@@ -184,9 +185,12 @@ class POPOmuseModel(ForwardModelBaseClass):
                 # ERA5-PC-AR forcing model needs some spin-up
                 self._era5_gen.spinup_AR()
                 setERA5PCARSpinUpfile(self.pop, self._era5_gen.get_spinup_file())
-            elif self._forcing_method == "ERA5-PC-NIG":
-                # ERA5-PC-NIG
-                print("TODO")
+            if self._forcing_method == "ERA5-PC-NIG":
+                # ERA5-PC-NIG forcing model needs a first set of RNG early on.
+                # Pass incoming noise to POP in a file
+                init_rnd_file = f"{self.run_folder}/PCNIG_init_noise.nc"
+                self._era5_gen.generate_noise_init_file(noise, init_rnd_file)
+                setERA5PCNIGInitfile(self.pop, init_rnd_file)
             elif self._forcing_method == "ERA5-NIG":
                 # ERA5-NIG uses a forcing file
                 # Formatted with {prefix}_{year} containing all 12 months.
@@ -236,11 +240,11 @@ class POPOmuseModel(ForwardModelBaseClass):
             )
         elif (self._forcing_method == "ERA5-PC-AR"):
             # Random numbers for noise generated are passed to POP
-            setERA5PCARForcing(self.pop, noise)
+            setERA5PCForcing(self.pop, noise)
             stochf_ampl = forcingAmpl
         elif (self._forcing_method == "ERA5-PC-NIG"):
-            # Amplitude is set to user-provided forcingAmpl
-            # Local data read from file provided in pop_in
+            # Random numbers for noise generated are passed to POP
+            setERA5PCForcing(self.pop, noise)
             stochf_ampl = forcingAmpl
         elif (self._forcing_method == "ERA5-NIG"):
             # Incoming noise is actually handled internally by POP
@@ -249,14 +253,6 @@ class POPOmuseModel(ForwardModelBaseClass):
 
         # All models use a scaling
         setStochForcingAmpl(self.pop, stochf_ampl)
-
-        #sfwf_flux = self.pop.elements.surface_fresh_water_flux.value_in(units.kg / units.m**2 / units.s)
-        #plot_globe_old(self.pop, sfwf_flux, "kg/m2/s", "sfwf_flux", elements=True)
-        #sfwf_flux_st = self.pop.elements.surface_freshwater_stoch_flux.value_in(units.kg / units.m**2 / units.s)
-        #plot_globe_old(self.pop, sfwf_flux_st, "kg/m2/s", "sfwf_flux_st", elements=True)
-        #sfwf_precip = self.pop.element_forcings.sfwf_precip.value_in(units.kg / units.m**2 / units.s)
-        #plot_globe_old(self.pop, sfwf_precip, "kg/m2/s", "sfwf_precip", elements=True)
-        #exit()
 
         # Get start and end date
         tstart = self.pop.model_time
@@ -267,6 +263,13 @@ class POPOmuseModel(ForwardModelBaseClass):
 
         # Advance POP to the end of the stochastic step
         self.pop.evolve_model(tend)
+
+        #sfwf_flux = self.pop.elements.surface_fresh_water_flux.value_in(units.kg / units.m**2 / units.s)
+        #plot_globe_old(self.pop, sfwf_flux, "kg/m2/s", "sfwf_flux", elements=True)
+        #sfwf_flux_st = self.pop.elements.surface_freshwater_stoch_flux.value_in(units.kg / units.m**2 / units.s)
+        #plot_globe_old(self.pop, sfwf_flux_st, "kg/m2/s", f"sfwf_flux_st_{self._step:04}", elements=True)
+        #surf_temp_st = self.pop.elements.surface_temp_stoch.value_in(units.Celsius)
+        #plot_globe_old(self.pop, surf_temp_st, "C", f"surf_temp_st_{self._step:04}", elements=True)
 
         # Retrieve the actual time for which POP was integrated
         tnow = self.pop.model_time
@@ -309,7 +312,7 @@ class POPOmuseModel(ForwardModelBaseClass):
             # A set of random numbers, one for each EOF of both E-P and T
             return self._era5_gen.generate_normal_noise()
         elif (self._forcing_method == "ERA5-PC-NIG"):
-            return 0.0
+            return self._era5_gen.generate_nig_noise()
         elif (self._forcing_method == "ERA5-NIG"):
             # Return a file name and month index
             if self.pop:
@@ -321,7 +324,7 @@ class POPOmuseModel(ForwardModelBaseClass):
                 self._era5_gen.generate_forcing_file(forcing_file_base, year)
                 return f"{forcing_file_base}_{month}"
             else:
-                return f"None"
+                return "None"
 
     @classmethod
     def name(self) -> str:
