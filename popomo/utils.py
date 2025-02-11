@@ -1,3 +1,6 @@
+import os
+import numpy as np
+from pathlib import Path
 from calendar import monthrange
 
 # Set month range manual, used when not considering leap years
@@ -81,3 +84,26 @@ def monthly_reference(a_date: str) -> float:
         18.805042028508758,  # 11 Dec
     ]
     return refs[month]
+
+def random_file_in_list(list_file: str) -> str:
+    """Return a entry from a list at random.
+
+    Args:
+        list_file : a file containing a list of init files
+
+    Returns:
+        a string with the path to an init file
+    """
+    assert os.path.exists(list_file) is True
+
+    # Load list of init files
+    with open(list_file, "r") as lsf:
+        list_f = lsf.readlines()
+
+    # Select a random file
+    selected = np.random.default_rng().integers(0, len(list_f))
+    elected = list_f[selected].strip()
+
+    assert Path(elected).exists() is True
+
+    return elected

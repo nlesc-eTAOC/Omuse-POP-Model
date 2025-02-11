@@ -26,6 +26,7 @@ from popomo.utils import (
     monthly_reference,
     remainingdaysincurrentmonth,
     year_month_day,
+    random_file_in_list,
 )
 from popomo.forcing_ERA5 import (
     ERA5NIGForcingGenerator,
@@ -117,11 +118,15 @@ class POPOmuseModel(ForwardModelBaseClass):
 
         # In this model, the state is a pointer to a POP restart file
         # Upon initialization, pass a initial solution if one is provided
+        # Init can be selected at random in a list of files
         self._state = None
         init_file = self._pop_params.get("init_file", None)
         if init_file:
             assert os.path.exists(init_file) is True
             self._state = init_file
+        init_files_list = self._pop_params.get("init_files_list", None)
+        if init_files_list:
+            self._state = random_file_in_list(init_files_list)
 
         # Forcing method
         # Default is "baseline-frac" which only requires a single random number
