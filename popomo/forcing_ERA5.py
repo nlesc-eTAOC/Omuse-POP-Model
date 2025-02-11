@@ -4,18 +4,20 @@ import random
 import netCDF4 as nc
 import logging
 import numpy.typing as npt
+from typing import Any
 from pathlib import Path
 from scipy.stats import norminvgauss
 
 _logger = logging.getLogger(__name__)
 
-class ERA5PCARForcingGenerator:
-    """A class encapsulating ERA5-PC-AR model forcing generation.
+class ERA5PCForcingGenerator:
+    """A class encapsulating ERA5-PC based model forcing generation.
 
     This class gather functionalities to generate forcing noise
     on E-P and T@2m using A. Boot analysis published in:
     https://esd.copernicus.org/articles/16/115/2025/
-    In particular, the PC autoregressive (AR) model only available in an early
+    Two PC-based forcing are implemented: PC(NIG) and the PC(AR)
+    autoregressive model only available in an early
     version of the paper.
 
     Attributes:
@@ -23,16 +25,27 @@ class ERA5PCARForcingGenerator:
         _nr_eofs : total number of EOFs in E-P and T@2m
     """
     def __init__(self,
-                 data_path : str) -> None:
+                 data_path : str,
+                 model : str) -> None:
         """Initialize the generator."""
         self._nr_eofs = -1
+        self._nr_eofs_ep = -1
+        self._nr_eofs_t2m = -1
         self._data_path : str = data_path
         self._rng = None
         self._spinup_file = None
+        self._model = model
+        self._nig_params = None
         if not Path(data_path).is_dir():
-            err_msg = f"Wrong ERA5-PC-AR forcing model data path {data_path}"
+            err_msg = f"Wrong ERA5-PC forcing model data path {data_path}"
             _logger.error(err_msg)
             raise ValueError(err_msg)
+
+        if model not in ["PC-AR", "PC-NIG"]:
+            err_msg = f"Wrong ERA5-PC model {model} !"
+            _logger.error(err_msg)
+            raise ValueError(err_msg)
+
 
     def set_rng(self,
                 randomgen) -> None:
@@ -42,16 +55,6 @@ class ERA5PCARForcingGenerator:
             An initialized random number generator
         """
         self._rng = randomgen
-
-    def set_nr_eofs(self,
-                    neofs : int) -> None:
-        """Set the internal number of EOFs.
-
-        Args:
-            neofs : number of EOFs
-        """
-        self._nr_eofs = neofs
-
 
     def set_spinup_file(self,
                         ERA5PCARSpinUpfile : str) -> None:
@@ -74,6 +77,27 @@ class ERA5PCARForcingGenerator:
             _logger.error(err_msg)
             raise RuntimeError(err_msg)
         return self._spinup_file
+
+    def load_NIG_data(self) -> None:
+        """Load the NIG parameters for the EOFs."""
+        # Check for NIG distributions parameter files
+        if (not Path(f"{self._data_path}/params_era_ep_PC_NIG.npy").exists() or
+            not Path(f"{self._data_path}/params_era_t2m_PC_NIG.npy").exists()):
+            err_msg = f"Missing PC-NIG param files in {self._data_path}"
+            _logger.error(err_msg)
+            raise RuntimeError(err_msg)
+
+        # Load the data
+        ep_data = np.load(f"{self._data_path}/params_era_ep_PC_NIG.npy")
+        t2m_data = np.load(f"{self._data_path}/params_era_t2m_PC_NIG.npy")
+
+        # Check the number of EOFs
+        self._nr_eofs_ep = np.shape(ep_data)[1]
+        self._nr_eofs_t2m = np.shape(t2m_data)[1]
+        self._nr_eofs = self._nr_eofs_ep + self._nr_eofs_t2m
+
+        # Combine in a single array
+        self._nig_params = np.concatenate((ep_data,t2m_data), axis=1)
 
 
     def spinup_AR(self) -> None:
@@ -104,6 +128,8 @@ class ERA5PCARForcingGenerator:
         hist_t2m = np.zeros([nr_t2m,l_m_t2m])                 # spinup history
 
         # Total number of random number needed in the future
+        self._nr_eofs_ep = nr_ep
+        self._nr_eofs_t2m = nr_t2m
         self._nr_eofs = nr_ep + nr_t2m
 
         for nr_i in range(nr_ep): # Loop over all EOFs
@@ -179,6 +205,46 @@ class ERA5PCARForcingGenerator:
         if self._rng is None:
             self._rng = np.random.default_rng()
         return  self._rng.standard_normal(self._nr_eofs)
+
+    def generate_nig_noise(self) -> npt.NDArray[np.float64]:
+        """Generate a vector of random values using normal inv. gaussian.
+
+        Returns:
+            A numpy array of floats.
+        """
+        if self._nig_params is None:
+            self.load_NIG_data()
+
+        noise = np.zeros(self._nr_eofs)
+        for i in range(len(noise)):
+            noise[i] = norminvgauss.rvs(*self._nig_params[:,i], size=1)
+
+        return noise
+
+    def generate_noise_init_file(self,
+                                 noise : Any,
+                                 hist_file : str) -> None:
+        """Generate an NetCDF init file of NIG noise.
+
+        Args:
+            noise: noise, np array of NIG drawn data
+            hist_file: a file to dump the history in.
+        """
+        # Check that length matches at least
+        if len(noise) != self._nr_eofs:
+            err_msg = f"Provided init noise length: {len(noise)} does not match {self._nr_eofs}"
+            _logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # Store history data
+        nc_out = nc.Dataset(hist_file, 'w')
+        nc_out.createDimension('nr_eofs_ep',self._nr_eofs_ep)
+        nc_out.createDimension('nr_eofs_t2m',self._nr_eofs_t2m)
+        nc_noise_ep = nc_out.createVariable('rnd_noise_ep', 'f8', ['nr_eofs_ep'])
+        nc_noise_ep[:] = noise[0:self._nr_eofs_ep]
+        nc_noise_t2m = nc_out.createVariable('rnd_noise_t2m', 'f8', ['nr_eofs_t2m'])
+        nc_noise_t2m[:] = noise[self._nr_eofs_ep:self._nr_eofs]
+        nc_out.close()
 
 
 class ERA5NIGForcingGenerator:
