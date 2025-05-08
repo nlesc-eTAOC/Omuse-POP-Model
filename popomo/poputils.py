@@ -2,6 +2,7 @@ import os
 import shutil
 import numpy as np
 import logging
+from pathlib import Path
 from omuse.community.pop.interface import POP
 from omuse.units import units
 
@@ -33,7 +34,7 @@ def depth_levels(N: int, stretch_factor: float = 1.8) -> np.ndarray:
 
 def getPOPinstance(pop_domain_dict: dict = None,
                    pop_options: dict = None,
-                   root_run_folder: str = None) -> POP:
+                   root_run_folder: os.PathLike | None = None) -> POP:
     """Return an instance of POP given a parameter dict."""
     assert pop_domain_dict is not None
 
@@ -46,13 +47,11 @@ def getPOPinstance(pop_domain_dict: dict = None,
     redirect = pop_options.get("redirect", "none")
     redirect_file = "pop_log.txt"
     if root_run_folder:
-        redirect_file = "{}/pop_log.txt".format(root_run_folder)
+        redirect_file = f"{root_run_folder.as_posix()}/pop_log.txt"
 
     # Copy the nml option file to the run folder
-    orig_nml_file = pop_options.get("nml_file", "pop_in")
-    target_nml_file = "{}/{}".format(
-        root_run_folder, os.path.basename(orig_nml_file)
-    )
+    orig_nml_file = Path(pop_options.get("nml_file", "pop_in"))
+    target_nml_file = f"{root_run_folder.as_posix()}/{orig_nml_file.name}"
     shutil.copy(orig_nml_file, target_nml_file)
 
     inf_msg = f"Initiating pop_{mode} with input nml {target_nml_file}"
@@ -109,12 +108,12 @@ def getPOPinstance(pop_domain_dict: dict = None,
         raise POPUtilsError(err_msg)
 
     # Set the POP average output prefix
-    p.parameters.tavg_file = root_run_folder + "/tavg"
+    p.parameters.tavg_file = root_run_folder.as_posix() + "/tavg"
 
 
     # Set the diag and transport output prefix
-    p.parameters.diagout_file = root_run_folder + "/diag"
-    p.parameters.trandiagout_file = root_run_folder + "/tran"
+    p.parameters.diagout_file = root_run_folder.as_posix() + "/diag"
+    p.parameters.trandiagout_file = root_run_folder.as_posix() + "/tran"
 
     return p
 
