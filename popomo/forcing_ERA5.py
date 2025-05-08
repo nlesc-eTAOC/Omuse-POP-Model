@@ -4,6 +4,7 @@ import random
 import netCDF4 as nc
 import logging
 import numpy.typing as npt
+import pop_tools
 from typing import Any
 from pathlib import Path
 from scipy.stats import norminvgauss
@@ -58,7 +59,7 @@ class ERA5PCForcingGenerator:
 
     def set_spinup_file(self,
                         ERA5PCARSpinUpfile : str) -> None:
-        """Set the spinup AR file.
+        """Set the spinup PC-AR file.
 
         Args:
             ERA5PCARSpinUpfile : the path for the NetCDF output spinup file
@@ -79,16 +80,16 @@ class ERA5PCForcingGenerator:
         return self._spinup_file
 
     def load_NIG_data(self) -> None:
-        """Load the NIG parameters for the EOFs."""
+        """Load the PC-NIG parameters for the EOFs."""
         # Check for NIG distributions parameter files
-        if (not Path(f"{self._data_path}/params_era_ep_PC_NIG.npy").exists() or
+        if (not Path(f"{self._data_path}/params_era_p_only_PC_NIG.npy").exists() or
             not Path(f"{self._data_path}/params_era_t2m_PC_NIG.npy").exists()):
             err_msg = f"Missing PC-NIG param files in {self._data_path}"
             _logger.error(err_msg)
             raise RuntimeError(err_msg)
 
         # Load the data
-        ep_data = np.load(f"{self._data_path}/params_era_ep_PC_NIG.npy")
+        ep_data = np.load(f"{self._data_path}/params_era_p_only_PC_NIG.npy")
         t2m_data = np.load(f"{self._data_path}/params_era_t2m_PC_NIG.npy")
 
         # Check the number of EOFs
@@ -101,7 +102,7 @@ class ERA5PCForcingGenerator:
 
 
     def spinup_AR(self) -> None:
-        """Spinup data for AR model.
+        """Spinup data for PC-AR model.
 
         The autoregressive model requires history data. This function
         generates a history and stores it in a NetCDF file.
@@ -224,7 +225,7 @@ class ERA5PCForcingGenerator:
     def generate_noise_init_file(self,
                                  noise : Any,
                                  hist_file : str) -> None:
-        """Generate an NetCDF init file of NIG noise.
+        """Generate an NetCDF init file of PC-NIG noise.
 
         Args:
             noise: noise, np array of NIG drawn data
